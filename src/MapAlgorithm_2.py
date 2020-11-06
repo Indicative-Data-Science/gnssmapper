@@ -52,12 +52,11 @@ class MapAlgorithm:
 
     def update(self,building):
         buildingID=np.full(shape=(len(self.observations),),fill_value= self.key(building))
-        obs = self.observations["x"]
+        obs = self.observations.apply(lamba x: x["svid"] +str(x["t"]),axis=1)     
         z = self.map.get_height(self.observations,[building]*len(self.observations))
-        # ss = self.observations["ss"].fillna(0)
-        ss = self.observations["ss"]
-        data=np.column_stack((ss,z))
-        self.data[self.key(building)]=data
+        update=MapData(building=buildingID,observation=obs,ss=self.observations["ss"],z=z)
+        unchanged = self.data.loc[self.data["building"]!=buildingID]
+        self.data = pd.concat([unchanged,update], axis=0,ignore_index=True)
 
 
     def heights(self,buildings=None):
