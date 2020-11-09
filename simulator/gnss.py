@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import datetime
 from scipy.stats import rice, norm
-from svid_location import getOrbits, getSP3File, getSVIDLocation
+from simulator.svid_location import getSVIDLocation
 
 """ 
 =========================================
@@ -11,6 +11,8 @@ GNSS Emulator for GNSS Map data collection
 =========================================
 
 This module simulates GNSS observations of signal strength 
+
+# include the fresnel value for resampling strengths
 
 """
 
@@ -64,16 +66,6 @@ class GNSSEmulator:
         """
         self.map = map
         self.SSLB = 10
-        self.day = day
-        self.orbits = None
-        self.svid_func = None
-        self.setDay()
-    
-    def setDay(self):
-        #this would be better moved to a svid location module so it becomes a class with methods
-        sp3 = getSP3File(np.datetime_as_string(self.day,unit="D"))
-        self.orbits = getOrbits(sp3)
-        self.svid_func = getSVIDLocation(self.orbits)
 
     def observe(self,points, msr_noise):
         """Simulates a set of satellite observations
@@ -91,42 +83,14 @@ class GNSSEmulator:
             GNSS readings from receiver 
         """
         #first get the satellite locations with blank signal readings
-        observations = self.observeSat(points)
+        observations = observeSat(self.map,points)
 
         #model the signal
         observations.ss, observations.pr = self.modelSignal(observations, msr_noise)
 
         return observations
 
-    def observeSat(self,points):
-        """ generate an set of satellite observations without signal readings.
-        Parameters
-        ----------
-        points : ReceiverPoints
-            position of receiver
-        
-        Returns
-        -------
-        observations : Observations
-            GNSS readings from receiver without a signal strength or pseudorange
-        """
-
-        #extend the points to match the number of svids
-        sv_u = self.orbits['svid'].unique() 
-        sv = sv_u.repeat(points.shape[0])
-        points_=pd.concat([points]* sv_u.shape[0],ignore_index=True)
-        
-        wgs = self.getSatLocation(sv,points_.t)
-        p=self.map.clip(points_,wgs)
-        
-        observations=Observations(points_.x,points_.y,points_.z,points_.t,sv,*p.T)
-        #remove elevations outside of 0 or 85 degrees/1.48 rad
-        height=observations["sv_z"]-observations["z"]
-        distance=np.linalg.norm(observations[["sv_x","sv_y"]].to_numpy()-observations[["x","y"]].to_numpy(),axis=1)
-        elevation = np.arctan2(height,distance)
-        observations = observations[(elevation>0) & (elevation <1.48)]
-
-        return observations
+    
 
     def getSatLocation(self,sv,times):
         """ wraps the underlying svid function
@@ -196,5 +160,35 @@ class GNSSEmulator:
 
         return ss, pr
 
+def observeSat(map,points):
+    """ generate an set of satellite observations without signal readings.
+    Parameters
+    ----------
+    points : ReceiverPoints
+        position of receiver
+    
+    Returns
+    -------
+    observations : Observations
+        GNSS readings from receiver without a signal strength or pseudorange
+    """
+    
+    #extend the points to match the number of svids
+    sv_u = ["G01","G02"] #...to be extended
+    sv = sv_u.repeat(points.shape[0])
+    points_=pd.concat([points]* sv_u.shape[0],ignore_index=True)
+    
+    wgs = getSatLocation(sv,points_.t)
+    sv_points= map.clip(points_,wgs)
+    
+    observations = Observations(points_.x,points_.y,points_.z,points_.t,sv,*sv_points.T)
+    bounded = boundElevation(observations) 
+    return bounded
 
-
+def boundElevations(observations):
+    """ remove elevations outside of 0 or 85 degrees/1.48 rad
+    """
+    height=observations["sv_z"]-observations["z"]
+    distance=np.linalg.norm(observations[["sv_x","sv_y"]].to_numpy()-observations[["x","y"]].to_numpy(),axis=1)
+    elevation = np.arctan2(height,distance)
+    return observations[(elevation>0) & (elevation <1.48)]

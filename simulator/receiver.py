@@ -53,9 +53,6 @@ def xy_point_process(map,polygon,num_samples):
 
     while n > 0:
         p = np.random.random((n,2)) * np.array([[maxx-minx,maxy-miny]]) + np.array([[minx,miny]]) 
-        # x = np.random.random(np.sum(invalid))* (maxx-minx) + minx
-        # y = np.random.random(np.sum(invalid))* (maxy-miny) + miny
-        # p = np.column_stack((x,y))
         outside = p[map.isOutside(p,polygon),:]
         xy= np.vstack((xy,outside))
         n = num_samples - xy.shape[0]
