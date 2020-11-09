@@ -1,0 +1,57 @@
+# Settings for the experiments
+
+date: '2020-02-11'
+num_samples: 25
+ss_sd: 5
+
+Experiment_1 :
+  perform: True
+  polygon_length: 20
+  polygon_thickness: 2
+
+Experiment_2:
+  perform: True
+  #9am time start with an hour bound example below
+  start_time: 9
+  interval_length: 1
+  sampling_rate: 1
+
+Experiment_3:
+  perform: True
+  polygon_length: 30
+  polygon_thickness: 2
+  orientation: North
+
+Experiment_4:
+  perform: True
+  start_time: 9
+  sampling_rate: 1
+
+
+# Example config
+
+#Experiment_1 :
+# Square ring of width 30m and thickness 4m
+#  perform: True
+#  polygon_length: 30
+#  polygon_thickness: 4
+#
+#Experiment_2:
+# Random walk starting at 9am bounded to 11am.
+#  perform: True
+#  #9am time start with an hour bound example below
+#  start_time: 9
+#  interval_length: 2
+#
+#Experiment_3:
+# Square ring with width 30m and thickness 2m oriented North
+#  perform: False
+#  polygon_length: 30
+#  polygon_thickness: 2
+#  orientation: North
+#
+#Experiment_4:
+# Random walk starting at 9am with minute readings.
+#  perform: True
+#  start_time: 9
+ #sampling_rate: 60
