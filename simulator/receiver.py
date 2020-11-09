@@ -52,12 +52,12 @@ def xy_point_process(map,polygon,num_samples):
     n = num_samples - xy.shape[0]
 
     while n > 0:
-        p = np.random.random((n,2)) * np.array([[maxx-minx],[maxy-miny]]) + np.array([[minx],[miny]]) 
+        p = np.random.random((n,2)) * np.array([[maxx-minx,maxy-miny]]) + np.array([[minx,miny]]) 
         # x = np.random.random(np.sum(invalid))* (maxx-minx) + minx
         # y = np.random.random(np.sum(invalid))* (maxy-miny) + miny
         # p = np.column_stack((x,y))
-        outside = p[map.isOutside(polygon,p),:]
-        xy= np.vstack(xy,outside)
+        outside = p[map.isOutside(p,polygon),:]
+        xy= np.vstack((xy,outside))
         n = num_samples - xy.shape[0]
 
     return xy
@@ -152,15 +152,17 @@ def random_walk(map, time_bound, num_samples: int = 1000, polygon = None, receiv
             tempx += x_
             tempy += y_
             temps += 1
-            if temps%sampling_rate == 0 and map.isOutside(np.array([[tempx],[tempy]])):
-                x = x.append(tempx)
-                y = y.append(tempy)
-                s = s.append(temps)
+            if temps%sampling_rate == 0 and map.isOutside(np.array([[tempx,tempy]])):
+                x.append(tempx)
+                y.append(tempy)
+                s.append(temps)
 
-    s = np.timedelta64(s, 's')
     xy = np.column_stack((x, y))
     z = map.groundLevel(xy) + receiver_offset
-    t = time_bound[0] + np.mod(s, time_bound[1] - time_bound[0])  
+
+    time_range = np.array(np.timedelta64(time_bound[1] - time_bound[0],'s'),dtype=int)
+    bounded_s = np.mod(s,time_range)
+    t = time_bound[0] + np.array([np.timedelta64(int(s),'s') for s in bounded_s])
 
     return ReceiverPoints(xy[:,0],xy[:,1],z,t)
 
