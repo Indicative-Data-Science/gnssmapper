@@ -28,8 +28,8 @@ class GNSSData:
     def __init__(self,orbits_filepath="data/orbits/orbits.json",meta_filepath="data/orbits/orbits_meta.json"):
         self.orbits_filepath = orbits_filepath
         self.meta_filepath = meta_filepath
-        self.orbits = self.load_orbits(orbits_filepath)
-        self.metadata = self.load_meta(meta_filepath)
+        self.orbits = self.load_orbits(self.orbits_filepath)
+        self.metadata = self.load_meta(self.meta_filepath)
 
     @staticmethod
     def load_orbits(file:str ) -> dict:
@@ -81,7 +81,7 @@ class GNSSData:
         days = set(np.datetime_as_string(transmitted,unit='D').flatten())
         missing_days = days - self.metadata 
         self.updateOrbits(missing_days)
-        self.save()
+        # self.save()
 
         gpstimes = utc_to_gps(transmitted)
         return np.array([self.locateSatellite(t,s) for t,s in zip(gpstimes,sv)])
@@ -98,13 +98,14 @@ class GNSSData:
         """
         
         if svid not in self.orbits:
-            return [np.nan,np.nan.np.nan]
+            return [np.nan,np.nan,np.nan]
 
         idx = bisect.bisect_left(list(self.orbits[svid]),time) #requires ordered dictionary in sorted order for keys
-        poly_dict = self.orbits[svid][idx]
+        key = min(list(self.orbits[svid])[idx-1:idx],key= lambda x: abs(x-time))
+        poly_dict = self.orbits[svid][key]
 
         if time > poly_dict['ub'] or time < poly_dict['lb']:
-            return [np.nan,np.nan.np.nan]
+            return [np.nan,np.nan,np.nan]
     
         scaled_time = (time - poly_dict['mid'][0]) / poly_dict['scale'][0]
 
@@ -136,7 +137,7 @@ class GNSSData:
             sorted_orbits[sv]= OrderedDict(sorted(dic.items()))
         
         self.orbits=sorted_orbits
-        self.metadata += days
+        self.metadata = self.metadata.union(days)
         
 
 def createLagrangian(sp3_df: pd.DataFrame):
@@ -147,7 +148,10 @@ def createLagrangian(sp3_df: pd.DataFrame):
 
     for id_ in sp3_df['svid'].unique():
         orbits = sp3_df.loc[sp3_df['svid'] == id_,['gpstime','x','y','z']]
-        for i in range(3, len(orbits)-5, 4):
+        idxs = list(range(3, len(orbits)-5, 4))
+        if idxs[-1]!=len(orbits)-5:
+            idxs.append(len(orbits)-5)
+        for i in idxs:
             k,v = poly_lagrange(i, orbits )
             polyXYZ[id_][k] = v
     
@@ -185,11 +189,11 @@ def estimateMeasurementTime(time, svid):
         # except for Beidou GEO/IGSO which are estimated at 38,000km
         # GPS_UTC_OFFSET <- as.integer(as.POSIXct('1980-01-06',tz="UTC"))
         # GPS_UTC_LEAPSECONDS <- -18
-        LIGHTSPEED = 299792458
+        LIGHTSPEED = 0.299792458 #metres per ns
         BEIDOU_HIGH_SVID = ["C01", "C02", "C03", "C13", "C16", "C59", "C31", "C04", "C05", "C06", "C07", "C08", "C09",
                            "C10", "C38", "C18", "C39", "C40"]
-        BEIDOU_HIGH = 38000000 / LIGHTSPEED
-        ORBIT = 22000000 / LIGHTSPEED
+        BEIDOU_HIGH = np.timedelta64(int(38000000 / LIGHTSPEED),'ns')
+        ORBIT = np.timedelta64(int(22000000 / LIGHTSPEED),'ns')
         return np.where(np.isin(svid,BEIDOU_HIGH_SVID), time - BEIDOU_HIGH, time - ORBIT)
      
 
@@ -202,7 +206,7 @@ def utc_to_gps(time):
 def dateToGPS(utc: str) -> dict:
     """Return a GPS time given a UTC input."""
     gps_epoch = np.datetime64("1980-01-06") 
-    tdiff= np.array(np.timedelta64(utc-gps_epoch,'D'),dtype=float)
+    tdiff= np.array(np.timedelta64(utc-gps_epoch,'D'),dtype=int)
 
     # datetimeformat = "%Y-%m-%d"
     # DATE_GPS_WEEK0 = datetime.strptime("1980-01-06", datetimeformat)

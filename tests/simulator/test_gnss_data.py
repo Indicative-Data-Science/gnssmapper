@@ -19,9 +19,9 @@ class TestHelperFunctions(unittest.TestCase):
         self.assertEqual(dateToGPS(date), {'week': 2092, 'day': 2})
 
     def test_estimateMeasurementTime(self):
-        time=np.array([38000000/299792458,22000000/299792458])
+        time=np.array([np.datetime64(int(38000000/.299792458),'ns'),np.datetime64(int(22000000/.299792458),'ns')])
         svid=np.array(["C01","G01"])
-        npt.assert_almost_equal(estimateMeasurementTime(time,svid),np.array([0,0]))
+        npt.assert_almost_equal(np.array(estimateMeasurementTime(time,svid),dtype=float),np.array([0,0]))
 
     def test_poly_lagrange(self):
         time= np.arange(-0.3,0.7,0.1)
@@ -48,12 +48,12 @@ class TestSVIDLocation(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.sp3 = getSP3File('2020-02-11')
         cls.example_orbits = getOrbits(cls.sp3)
-        cls.gnssdata=GNSSData("na","na")
+        cls.gnssdata=GNSSData()
         cls.truncated_orbits=cls.example_orbits.loc[np.isin(cls.example_orbits['svid'],["G18","G14"]) & (cls.example_orbits['utctime'] <= np.datetime64("2020-02-11T02:00:00"))].reset_index(drop=True)
         cls.poly=createLagrangian(cls.truncated_orbits)
         for sv,dic in cls.poly.items():
             cls.gnssdata.orbits[sv]= OrderedDict(sorted(dic.items()))
-        cls.gnssdata.metadata=set('2020-02-11')
+        cls.gnssdata.metadata=set(['2020-02-11'])
 
 
     def test_getSP3File(self) -> None:
@@ -64,16 +64,16 @@ class TestSVIDLocation(unittest.TestCase):
 
     def test_getOrbits(self) -> None:
         self.assertIsInstance(self.example_orbits, pd.DataFrame)
-        npt.assert_equal(self.example_orbits.columns,
-                         ['epoch', 'utctime', 'svid', 'x', 'y', 'z', 'clockError'])
+        npt.assert_equal(list(self.example_orbits.columns),
+                         ['epoch', 'utctime', 'svid', 'x', 'y', 'z', 'clockerror'])
         self.assertEqual(self.example_orbits['utctime'].dtype, np.dtype('datetime64[ns]'))
 
     def test_createLagrangian(self):
-        self.assertCountEqual(ist(self.gnssdata.orbits.keys()),["G18","G14"])
-        self.assertCountEqual(list(self.gnssdata.orbits['G18'].keys()),set(self.truncated_orbits['gpstime'].tolist()))
+        self.assertCountEqual(list(self.gnssdata.orbits.keys()),["G18","G14"])
+        self.assertEqual(len(self.gnssdata.orbits['G18']),len([3,7,11,15,19,20]))
         
     def test_setup(self):
-        empty=GNSSData("na","na")
+        empty=GNSSData()
         self.assertEqual(empty.orbits,{})
         self.assertEqual(empty.metadata,set())
     
@@ -85,17 +85,18 @@ class TestSVIDLocation(unittest.TestCase):
     def test_locateSatellite(self):
         time=np.array([np.datetime64('2020-02-11T01:00:00','ns')])
         time_check =np.arange(np.datetime64('2020-02-11T00:15:00','ns'),np.datetime64('2020-02-11T01:40:00','ns'),np.timedelta64(20,'m'))
+        time_check= np.append(time_check,np.datetime64('2020-02-11T01:40:00','ns'))
         gpstime=utc_to_gps(time)
         entry=self.truncated_orbits.loc[(self.truncated_orbits['svid']=="G18") & (self.truncated_orbits['utctime']==time[0]),:]
-        npt.assert_almost_equal(list(self.gnssdata.orbits["G18"]),utc_to_gps(timecheck))
+        npt.assert_almost_equal(list(self.gnssdata.orbits["G18"]),utc_to_gps(time_check))
         predict=self.gnssdata.locateSatellite(gpstime,"G18")
         npt.assert_almost_equal(predict,[entry.x,entry.y,entry.z],decimal=3)
 
     def test_satLocation(self):
         time=np.array([np.datetime64('2020-02-11T01:00:00','ns')])
-        predict=self.gnssdata.satLocation(np.array(["G18"]),time+0.07*1e9)
+        predict=self.gnssdata.satLocation(np.array(["G18"]),time+np.timedelta64(int(22000000/.299792458),'ns'))
         entry=self.truncated_orbits.loc[(self.truncated_orbits['svid']=="G18") & (self.truncated_orbits['utctime']==time[0]),:]
-        npt.assert_almost_equal(predict,[entry.x,entry.y,entry.z],decimal=0)
+        npt.assert_almost_equal(np.array(predict).flatten(),np.asarray([entry.x,entry.y,entry.z]).flatten(),decimal=0)
 
 if __name__ == '__main__':
     unittest.main()
