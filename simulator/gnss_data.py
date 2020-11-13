@@ -24,36 +24,38 @@ from collections import defaultdict
 from scipy.interpolate import lagrange
 from numpy.polynomial import polynomial as P
 
+# load and save dictionaries to seperate days
+# when gnss called it updates all missing days
+# having the class avoids reloading the data.
+
+
 class GNSSData:
     def __init__(self,orbits_filepath="data/orbits/orbits.json",meta_filepath="data/orbits/orbits_meta.json"):
         self.orbits_filepath = orbits_filepath
         self.meta_filepath = meta_filepath
-        self.orbits = self.load_orbits(self.orbits_filepath)
-        self.metadata = self.load_meta(self.meta_filepath)
+        self.orbits= defaultdict(dict)
+
+
+    def metadata(self):
+        (_, _, filenames) = next(os.walk(self.orbits_filepath))
+        return set([f for f in filenames])
 
     @staticmethod
-    def load_orbits(file:str ) -> dict:
+    def load_orbits(days):
         """ retrieves the file of orbits data 
         """
+        days = set(days.flatten())
+        missing_days = days - self.metadata 
+        self.updateOrbits(missing_days)
+        # self.save()
         try:
             with open(file) as json_file:
                 data = json.load(json_file)
             return data
 
         except IOError:
-            return defaultdict(dict)
+            return 
 
-    @staticmethod    
-    def load_meta(file:str) -> dict:
-        """ retrieves the file of orbits metadata 
-        """
-        try:
-            with open(file) as json_file:
-                data = json.load(json_file)
-            return data
-
-        except IOError:
-            return set()
 
     def save(self) ->None:
         """save data
@@ -77,16 +79,11 @@ class GNSSData:
             location in wgs84 cartesian co-ords 
         """
         transmitted = estimateMeasurementTime(times,sv) #vectorise  
+        days,gpstimes = utc_to_gps(transmitted)
+        self.load_orbits(days)
+        return np.array([self.locateSatellite(d,t,s) for t,s in zip(days,gpstimes,sv)])
 
-        days = set(np.datetime_as_string(transmitted,unit='D').flatten())
-        missing_days = days - self.metadata 
-        self.updateOrbits(missing_days)
-        # self.save()
-
-        gpstimes = utc_to_gps(transmitted)
-        return np.array([self.locateSatellite(t,s) for t,s in zip(gpstimes,sv)])
-
-    def locateSatellite(self,time: float, svid: str)-> list:
+    def locateSatellite(self,day:str, time: float, svid: str)-> list:
         """ returns satellite location
         Parameters
         ----------
@@ -97,12 +94,13 @@ class GNSSData:
         location : xyz in wgs84 cartesian co-ords 
         """
         
-        if svid not in self.orbits:
+        if day not in self.orbits or svid not in self.orbits[day]:
             return [np.nan,np.nan,np.nan]
 
-        idx = bisect.bisect_left(list(self.orbits[svid]),time) #requires ordered dictionary in sorted order for keys
-        key = min(list(self.orbits[svid])[idx-1:idx],key= lambda x: abs(x-time))
-        poly_dict = self.orbits[svid][key]
+        keys= list(self.orbits[day][svid])
+        idx = bisect.bisect_left(keys,time) #requires ordered dictionary in sorted order for keys
+        key = min(keys[idx-1:idx],key= lambda x: abs(x-time))
+        poly_dict = self.orbits[day][svid][key]
 
         if time > poly_dict['ub'] or time < poly_dict['lb']:
             return [np.nan,np.nan,np.nan]
