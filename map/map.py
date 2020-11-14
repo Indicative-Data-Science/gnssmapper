@@ -129,10 +129,12 @@ class Map:
         receiver = np.array(points[["x","y","z"]])
         rays = (shapely.geometry.LineString([r,s]) for r,s in zip(receiver.tolist(),bng.tolist()))
         box_=shapely.geometry.box(*self.bbox).exterior
-        
+        assert np.all(self.isOutside(receiver[:,0:2],shapely.geometry.box(*self.bbox))), "clipping process is using lines outside the box"
+
+
         intersections=(box_ & ray for ray in rays)
-        pos = np.array([intersection.coords for intersection in intersections]).squeeze()
-        assert pos.shape==wgs.shape, "The clipping process has not generated 1 point for each satellite"
+        pos = np.array([intersection.coords if intersection.geom_type=='Point' else np.array([np.nan,np.nan,np.nan]) for intersection in intersections]).squeeze()
+        assert pos.shape==wgs.squeeze().shape, "The clipping process has not generated 1 point for each satellite"
         
         # height=bng[:,2]-receiver[:,2]
         # distance=np.linalg.norm(bng[:,:2]-receiver[:,:2],axis=1)
@@ -377,7 +379,6 @@ def fresnel_parameter(rays,diffraction_points):
     
     v = np.where(distances==0, -np.inf,diffraction_distances *( 2 / (wavelength * distances))**0.5)
     return v
-
 
 def bound(wgs):
     """ bounds position to a 3D bounding box of 100km surrounding London

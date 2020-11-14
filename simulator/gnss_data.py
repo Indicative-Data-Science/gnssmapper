@@ -3,67 +3,53 @@
 GNSS Data 
 =========================================
 
-This module calculates GNSS signal information from GNSS raw data
+This module calculates GNSS signal information from GNSS raw data. It defines a class to avoid reloading the data each time the function is called.
 
 """
 
 import json
 import bisect
-from collections import OrderedDict
+from collections import defaultdict,OrderedDict
 
 import pandas as pd
 import numpy as np
 import os
+import re
 import io
 import math
 import gzip
 import zlib
 import urllib.request
 from datetime import datetime, timezone, date
-from collections import defaultdict
 from scipy.interpolate import lagrange
 from numpy.polynomial import polynomial as P
 
-# load and save dictionaries to seperate days
-# when gnss called it updates all missing days
-# having the class avoids reloading the data.
-
 
 class GNSSData:
-    def __init__(self,orbits_filepath="data/orbits/orbits.json",meta_filepath="data/orbits/orbits_meta.json"):
+    def __init__(self,orbits_filepath="data/orbits/"):
         self.orbits_filepath = orbits_filepath
-        self.meta_filepath = meta_filepath
         self.orbits= defaultdict(dict)
 
-
+    @property
     def metadata(self):
-        (_, _, filenames) = next(os.walk(self.orbits_filepath))
-        return set([f for f in filenames])
+        filenames = [ f for f in (os.listdir(self.orbits_filepath)) if re.match("orbits_",f)]
+        days=[re.split('_|\.',f)[1] for f in filenames]
+        
+        return set(days)
 
-    @staticmethod
-    def load_orbits(days):
-        """ retrieves the file of orbits data 
-        """
-        days = set(days.flatten())
-        missing_days = days - self.metadata 
-        self.updateOrbits(missing_days)
-        # self.save()
+    def load_orbit(self,day):
         try:
-            with open(file) as json_file:
+            with open(self.orbits_filepath+get_filename(day)) as json_file:
                 data = json.load(json_file)
             return data
 
         except IOError:
-            return 
+            return dict()
 
+    def save_orbit(self,day,data) ->None:
+        with open(self.orbits_filepath+get_filename(day), 'w') as outfile:
+            json.dump(data, outfile,indent=4)
 
-    def save(self) ->None:
-        """save data
-        """
-        with open(self.orbits_filepath, 'w') as outfile:
-            json.dump(self.orbits, outfile,indent=4)
-        with open(self.meta_filepath, 'w') as outfile:
-            json.dump(self.metadata, outfile,indent=4)
 
     def satLocation(self,sv,times):
         """ returns satellite locations
@@ -72,23 +58,24 @@ class GNSSData:
         sv : [n,] string array 
             satellite ids
         times: [n,] np.datetime64 array
-            time of observation
+            utc time of observation
         Returns
         -------
         location : [n,3] array 
             location in wgs84 cartesian co-ords 
         """
         transmitted = estimateMeasurementTime(times,sv) #vectorise  
-        days,gpstimes = utc_to_gps(transmitted)
-        self.load_orbits(days)
-        return np.array([self.locateSatellite(d,t,s) for t,s in zip(days,gpstimes,sv)])
+        days,gpstimes = utc_to_doy(transmitted)
+        self.updateOrbits(days)
+        return np.array([self.locateSatellite(d,t,s) for d,t,s in zip(days,gpstimes,sv)])
 
     def locateSatellite(self,day:str, time: float, svid: str)-> list:
         """ returns satellite location
         Parameters
         ----------
         svid: satellite ids
-        time: seconds since gps epoch 
+        day: doy format 
+        time: time of day in ns 
         Returns
         -------
         location : xyz in wgs84 cartesian co-ords 
@@ -97,10 +84,10 @@ class GNSSData:
         if day not in self.orbits or svid not in self.orbits[day]:
             return [np.nan,np.nan,np.nan]
 
-        keys= list(self.orbits[day][svid])
-        idx = bisect.bisect_left(keys,time) #requires ordered dictionary in sorted order for keys
-        key = min(keys[idx-1:idx],key= lambda x: abs(x-time))
-        poly_dict = self.orbits[day][svid][key]
+        keys= [float(x) for x in self.orbits[day][svid]]
+        close = bisect.bisect_left(keys,time) #requires ordered dictionary in sorted order for keys
+        idx = min([close-1,close],key= lambda x: abs(keys[x]-time))
+        poly_dict = self.orbits[day][svid][list(self.orbits[day][svid])[idx]]
 
         if time > poly_dict['ub'] or time < poly_dict['lb']:
             return [np.nan,np.nan,np.nan]
@@ -114,34 +101,33 @@ class GNSSData:
         return [predict(dim) for dim in ['x','y','z']]
 
     def updateOrbits(self,days):
-        """ updates orbit database for missing days
+        """ loads orbits, updating orbit database where necessary
         Parameters
         ----------
-        days : set of string utc dates.
+        days : np.array of string days in doy format.
         """
-        unsorted_orbits = self.orbits
+        days = set(days.flatten())
+        missing_days = days - self.metadata
 
-        for day in days:
+        for day in missing_days:
+            orbit_dic=defaultdict(dict)
             sp3 = getSP3File(day)
             orbits = getOrbits(sp3)
             lagrangian_dic = createLagrangian(orbits)
             for sv,dic in lagrangian_dic.items():
-                for time,coefs_dic in dic.items():
-                    unsorted_orbits[sv][time]= coefs_dic
+                orbit_dic[sv]=OrderedDict(sorted(dic.items()))
+            self.save_orbit(day,orbit_dic)
+  
+        for day in days:
+            if day not in self.orbits:  
+                self.orbits[day]=self.load_orbit(day)
         
-
-        sorted_orbits={}
-        for sv,dic in unsorted_orbits.items():
-            sorted_orbits[sv]= OrderedDict(sorted(dic.items()))
-        
-        self.orbits=sorted_orbits
-        self.metadata = self.metadata.union(days)
-        
-
 def createLagrangian(sp3_df: pd.DataFrame):
     # creates Lagrangian 7th order polynomials for estimating location, generating estimates centred at every 4th data point
-    sp3_df['gpstime'] = utc_to_gps(sp3_df['utctime'])
-    sp3_df = sp3_df.sort_values(['gpstime', 'svid'])
+    daystr,sp3_df['gpstime'] = utc_to_doy(sp3_df['utctime'])
+    day = daystr.astype(int)
+    sp3_df['gpstime'] = sp3_df['gpstime']  + (day-min(day)) * 24* 3600 *1e9
+    sp3_df = sp3_df.sort_values(['svid','gpstime'])
     polyXYZ = defaultdict(dict)
 
     for id_ in sp3_df['svid'].unique():
@@ -181,7 +167,6 @@ def poly_lagrange(i, alldata: pd.DataFrame):
 
     return [mid[0], {'lb': lb, 'ub': ub, 'mid': list(mid), 'scale': list(scale), 'x': coefs('x'), 'y': coefs('y'), 'z': coefs('z') } ]
 
-
 def estimateMeasurementTime(time, svid):
         # this estimates transmission time for a given epoch signal based on estimated satellite distance of 22,000 km
         # except for Beidou GEO/IGSO which are estimated at 38,000km
@@ -194,21 +179,22 @@ def estimateMeasurementTime(time, svid):
         ORBIT = np.timedelta64(int(22000000 / LIGHTSPEED),'ns')
         return np.where(np.isin(svid,BEIDOU_HIGH_SVID), time - BEIDOU_HIGH, time - ORBIT)
      
+def get_filename(day:str)->str:
+    return "orbits_"+day+".json"
 
-def utc_to_gps(time):
-    """Returns a GPS timestamp since epoch give a np.datetime64 input"""
-    gps_epoch = np.datetime64("1980-01-06")
-    delta= time- gps_epoch
-    return np.array([np.timedelta64(t,'ns') for t in delta],dtype=float) 
+def utc_to_doy(dates):
+    """Returns a doy format"""
+    year = np.datetime_as_string(dates,"Y")
+    doy = np.array([np.datetime64(date,"D") - np.datetime64(date,"Y")+1 for date in dates]).astype(int).astype(str)
+    ns = np.array([np.datetime64(date,"ns") - np.datetime64(date,"D") for date in dates]).astype(float)
+    yeardoy= np.char.add(year,np.char.zfill(doy,3))
+    return [yeardoy,ns]
 
-def dateToGPS(utc: str) -> dict:
-    """Return a GPS time given a UTC input."""
-    gps_epoch = np.datetime64("1980-01-06") 
-    tdiff= np.array(np.timedelta64(utc-gps_epoch,'D'),dtype=int)
-
-    # datetimeformat = "%Y-%m-%d"
-    # DATE_GPS_WEEK0 = datetime.strptime("1980-01-06", datetimeformat)
-    # tdiff = datetime.strptime(utc, datetimeformat) - DATE_GPS_WEEK0
+def doyToGPS(yeardoy: str) -> dict:
+    """Return a GPS date given a doy input."""
+    year,doy = np.datetime64(yeardoy[:4],"Y"),yeardoy[4:]
+    gps_epoch = np.datetime64("1980-01-06","D") 
+    tdiff= (year-gps_epoch+np.timedelta64(int(doy)-1,'D')).astype(int)
     gpsweek = tdiff // 7
     gpsdays = tdiff - 7 * gpsweek
 
@@ -223,20 +209,12 @@ def getSP3File(date_: str, kind='MGNSS'):
 
     """
     SP3_DATASITE = "http://navigation-office.esa.int/products/gnss-products/"
-    gpsdate = dateToGPS(np.datetime64(date_,"D"))
+    gpsdate = doyToGPS(date_)
 
     if kind == 'rapids':
         filename= 'esu' + str(gpsdate['week']) + str(gpsdate['day']) + '_00.sp3.Z'
     elif kind=='MGNSS':
-        date_list = date_.split('-')
-        day_diff = date(int(date_list[0]), int(date_list[1]), int(date_list[2])+1) - date(int(date_list[0]), 1, 1)
-        day_diff = day_diff.days
-        if len(str(day_diff)) == 1:
-            day_diff = '00' + str(day_diff)
-        elif len(str(day_diff)) == 2:
-            day_diff = '0' + str(day_diff)
-
-        filename = 'ESA0MGNFIN_' + str(date_list[0]) + str(day_diff) + '0000_01D_05M_ORB.SP3.gz'
+        filename = 'ESA0MGNFIN_' + date_ + '0000_01D_05M_ORB.SP3.gz'
        
     url = SP3_DATASITE + str(gpsdate['week']) + '/' + filename
     local = str(os.getcwd()) + '/data/sp3/' + filename

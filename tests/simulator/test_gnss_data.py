@@ -9,14 +9,15 @@ import pandas as pd
 import copy
 
 class TestHelperFunctions(unittest.TestCase):
-    def test_utc_to_gps(self) -> None:
+    def test_utc_to_doy(self) -> None:
         time=np.array([np.datetime64('2020-02-11','D')])
-        self.assertEqual(utc_to_gps(time), 1265414400000000000)
+        self.assertEqual(utc_to_doy(time)[0],["2020042"])
+        npt.assert_almost_equal(utc_to_doy(time)[1],[0.0])
 
-    def test_dateToGPS(self) -> None:
-        date = np.datetime64('2020-02-11',"D")
-        self.assertIsInstance(dateToGPS(date), dict)
-        self.assertEqual(dateToGPS(date), {'week': 2092, 'day': 2})
+    def test_doyToGPS(self) -> None:
+        date = "2020042"
+        self.assertIsInstance(doyToGPS(date), dict)
+        self.assertDictEqual(doyToGPS(date), {'week': 2092, 'day': 2})
 
     def test_estimateMeasurementTime(self):
         time=np.array([np.datetime64(int(38000000/.299792458),'ns'),np.datetime64(int(22000000/.299792458),'ns')])
@@ -46,14 +47,13 @@ class TestHelperFunctions(unittest.TestCase):
 class TestSVIDLocation(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.sp3 = getSP3File('2020-02-11')
+        cls.sp3 = getSP3File('2020042')
         cls.example_orbits = getOrbits(cls.sp3)
         cls.gnssdata=GNSSData()
         cls.truncated_orbits=cls.example_orbits.loc[np.isin(cls.example_orbits['svid'],["G18","G14"]) & (cls.example_orbits['utctime'] <= np.datetime64("2020-02-11T02:00:00"))].reset_index(drop=True)
         cls.poly=createLagrangian(cls.truncated_orbits)
         for sv,dic in cls.poly.items():
-            cls.gnssdata.orbits[sv]= OrderedDict(sorted(dic.items()))
-        cls.gnssdata.metadata=set(['2020-02-11'])
+            cls.gnssdata.orbits['2020042'][sv]= OrderedDict(sorted(dic.items()))
 
 
     def test_getSP3File(self) -> None:
@@ -69,33 +69,33 @@ class TestSVIDLocation(unittest.TestCase):
         self.assertEqual(self.example_orbits['utctime'].dtype, np.dtype('datetime64[ns]'))
 
     def test_createLagrangian(self):
-        self.assertCountEqual(list(self.gnssdata.orbits.keys()),["G18","G14"])
-        self.assertEqual(len(self.gnssdata.orbits['G18']),len([3,7,11,15,19,20]))
+        self.assertCountEqual(list(self.gnssdata.orbits['2020042'].keys()),["G18","G14"])
+        self.assertEqual(len(self.gnssdata.orbits['2020042']['G18']),len([3,7,11,15,19,20]))
         
     def test_setup(self):
         empty=GNSSData()
         self.assertEqual(empty.orbits,{})
-        self.assertEqual(empty.metadata,set())
+
     
     def test_updateOrbits(self):
         a=copy.deepcopy(self.gnssdata.orbits)
-        self.gnssdata.updateOrbits(set())
+        self.gnssdata.updateOrbits(np.array([]))
         self.assertDictEqual(a,self.gnssdata.orbits)
     
     def test_locateSatellite(self):
         time=np.array([np.datetime64('2020-02-11T01:00:00','ns')])
         time_check =np.arange(np.datetime64('2020-02-11T00:15:00','ns'),np.datetime64('2020-02-11T01:40:00','ns'),np.timedelta64(20,'m'))
         time_check= np.append(time_check,np.datetime64('2020-02-11T01:40:00','ns'))
-        gpstime=utc_to_gps(time)
-        entry=self.truncated_orbits.loc[(self.truncated_orbits['svid']=="G18") & (self.truncated_orbits['utctime']==time[0]),:]
-        npt.assert_almost_equal(list(self.gnssdata.orbits["G18"]),utc_to_gps(time_check))
-        predict=self.gnssdata.locateSatellite(gpstime,"G18")
-        npt.assert_almost_equal(predict,[entry.x,entry.y,entry.z],decimal=3)
+        gpstime=utc_to_doy(time)
+        entry=self.truncated_orbits.loc[(self.truncated_orbits['svid']=="G18") & (self.truncated_orbits['utctime']==time[0]),:].reset_index(drop=True)
+        npt.assert_almost_equal(list(self.gnssdata.orbits["2020042"]["G18"]),list(utc_to_doy(time_check)[1]))
+        predict=self.gnssdata.locateSatellite(gpstime[0][0],gpstime[1][0],"G18")
+        npt.assert_almost_equal(predict,np.asarray([entry.x,entry.y,entry.z]).flatten(),decimal=3)
 
     def test_satLocation(self):
         time=np.array([np.datetime64('2020-02-11T01:00:00','ns')])
         predict=self.gnssdata.satLocation(np.array(["G18"]),time+np.timedelta64(int(22000000/.299792458),'ns'))
-        entry=self.truncated_orbits.loc[(self.truncated_orbits['svid']=="G18") & (self.truncated_orbits['utctime']==time[0]),:]
+        entry=self.truncated_orbits.loc[(self.truncated_orbits['svid']=="G18") & (self.truncated_orbits['utctime']==time[0]),:].reset_index(drop=True)
         npt.assert_almost_equal(np.array(predict).flatten(),np.asarray([entry.x,entry.y,entry.z]).flatten(),decimal=0)
 
 if __name__ == '__main__':
