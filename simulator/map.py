@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import shapely.geometry
+import math
 from shapely.wkt import loads
 from itertools import chain,compress,cycle,repeat
 import pyproj
@@ -19,9 +20,9 @@ class Map:
 
     def __init__(self, map_location):
         self.map_location = map_location
-        self.setMap()
+        self.set_map()
 
-    def setMap(self):
+    def set_map(self):
         """ Reads a WKT file containing 1 multipolygon with 3d coords. These are the buildings of our map.
 
         Attributes
@@ -56,12 +57,12 @@ class Map:
             raise ValueError("shapely cannot handle 3d intersections")
 
         self.heights = np.array([poly.exterior.coords[0][2] for poly in poly3d]) #this takes the height of first point in exterior line. no test for height validity (i.e. flat across building). could use a fn?
-        buffer=10
+        buffer=20
         minx, miny, maxx, maxy = self.buildings.bounds
         self.bbox=(minx-buffer,miny-buffer,maxx+buffer,maxy+buffer)
         self.buildingID= [str(i) for i in range(len(self.buildings))]       
 
-    def isOutside(self,points, polygon=shapely.geometry.Polygon()):
+    def is_outside(self,points, polygon=shapely.geometry.Polygon()):
         """  
         Parameters
         ----------
@@ -72,7 +73,7 @@ class Map:
 
         Returns
         -------
-        isOutside: [n,] boolean array 
+        is_outside: [n,] boolean array 
             true if points are outside (including edge) of all buildings and inside an optional bounding polygon. 
 
         """
@@ -85,7 +86,7 @@ class Map:
         
         return np.array(k)
 
-    def groundLevel(self,points):
+    def ground_level(self,points):
         """  
         Parameters
         ----------
@@ -104,7 +105,7 @@ class Map:
         return k
 
     def clip(self,points,wgs):
-        """ turns satellite positions into a BNG format
+        """ clips satellite positions to a projection onto the bounding box with a BNG format 
         Parameters
         ----------
         points : [n,..] ReceiverPoints
@@ -129,7 +130,7 @@ class Map:
         receiver = np.array(points[["x","y","z"]])
         rays = (shapely.geometry.LineString([r,s]) for r,s in zip(receiver.tolist(),bng.tolist()))
         box_=shapely.geometry.box(*self.bbox).exterior
-        assert np.all(self.isOutside(receiver[:,0:2],shapely.geometry.box(*self.bbox))), "clipping process is using lines outside the box"
+        assert np.all(is_inside(receiver[:,0:2],shapely.geometry.box(*self.bbox))), "clipping process is using lines outside the box"
 
 
         intersections=(box_ & ray for ray in rays)
@@ -142,7 +143,7 @@ class Map:
         # return np.column_stack((pos[:,:2],elevation))
         return pos
 
-    def isLos(self,observations):
+    def is_los(self,observations):
         """  
         Parameters
         ----------
@@ -179,7 +180,6 @@ class Map:
 
         """
         rays_var = rays(observations)
- 
         return np.array([get_fresnel(ray,self.buildings,self.heights) for ray in rays_var])
 
     def projected_height(self,observations):
@@ -195,15 +195,15 @@ class Map:
             height at which n observation intersects m projected building. Nan if no intersection
 
         """
-        rays_var = [rays(observations)]
-        b= chain(repeat(self.buildings,len(rays_var)))
-        r = chain(zip(*repeat(rays_var,len(self.buildings))))
+        rays_var = list(rays(observations))
+        b= chain(*repeat(self.buildings,len(rays_var)))
+        r = chain(*zip(*repeat(rays_var,len(self.buildings))))
 
         heights = intersection_projected_height(r,b)
-        heights.reshape((-1,len(self.buildings)))
+        heights=heights.reshape((-1,len(self.buildings)))
         return pd.DataFrame(data=heights,columns= self.buildingID)
 
-def isInside(polygon, points):
+def is_inside(points,polygon):
         """  
         Parameters
         ----------
@@ -214,7 +214,7 @@ def isInside(polygon, points):
 
         Returns
         -------
-        isOutside: [n,] boolean array 
+        is_outside: [n,] boolean array 
             true if points are inside a bounding polygon. 
 
         """
@@ -238,8 +238,8 @@ def rays(observations):
             rays from receiver to GNSS 
 
         """
-        receiver=observations[["x","y","z"]].to_numpy().tolist()
-        sat=observations[["sv_x","sv_y","sv_z"]].to_numpy().tolist()
+        receiver=observations.loc[:,["x","y","z"]].to_numpy().tolist()
+        sat=observations.loc[:,["sv_x","sv_y","sv_z"]].to_numpy().tolist()
         return  (shapely.geometry.LineString([r,s]) for r,s in zip(receiver,sat))
 
 def intersection_projected(rays,buildings):
@@ -342,19 +342,32 @@ def get_fresnel(ray,buildings,heights):
 
     sort_index= np.argsort(points[i].z for i in idx)
     idx=idx[sort_index]
-
     diffraction_points = [shapely.geometry.Point(points[i].x,points[i].y,heights[i]) for i  in  idx]
     start = chain([ray.boundary[0]],diffraction_points)   
     end = chain(diffraction_points,[ray.boundary[1]])
     next(end)
-
     ep_rays = [shapely.geometry.LineString([p,q]) for p,q in zip(start,end)]
     v = fresnel_parameter(ep_rays,diffraction_points)
     Jv = fresnel_integral(v) 
     return np.sum(Jv)
 
-def fresnel_integral(v):
-    return np.where( v<-0.7 , 0 , 6.9 + 20 * np.log(((v-0.1)**2 +1)**0.5 +v -0.1  ))
+def fresnel_integral(v_array):
+    def J(v):
+        if v<-1:
+            return 0
+        if v<0 and v>=-1:
+            return 20 * math.log(0.5 -0.62*v)
+        if v<1 and v>=0:
+            return 20 * math.log(0.5 * math.exp(-0.95*v))
+        if v<2.4 and v>=1:
+            return 20 * math.log(0.4 - (0.1184-(0.38-0.1*v)**2)**0.5)
+        if v>=2.4:
+            return 20 * math.log(0.225/v)
+
+    return np.array([-J(_) for _ in v_array])
+    # return np.where( v<-0.7 , 0 , 6.9 + 20 * np.log(((v-0.1)**2 +1)**0.5 +v -0.1  )) #where did this come from?
+
+
     
 def fresnel_parameter(rays,diffraction_points):
     """ returns the fresnel diffraction parameter (always as a positive)
@@ -396,6 +409,7 @@ def bound(wgs):
     ORIGIN = np.array([[3980000, -10000, 4970000]])  # London (WGS84 cartesian co-ordinates)
     BBOX_SIDE_LENGTH = 100000
     delta = wgs - ORIGIN
+    # delta_ = np.concatenate((delta,np.ones((delta.shape[0],1))*BBOX_SIDE_LENGTH),axis=1 )  # don't move points within the box.
     scale = BBOX_SIDE_LENGTH / np.amax(np.abs(delta),axis=1)
     return ORIGIN+delta*np.expand_dims(scale,axis=1)
 

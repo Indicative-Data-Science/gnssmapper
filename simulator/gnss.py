@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from scipy.stats import rice, norm
-from simulator.gnss_data import GNSSData
+from simulator.gnssData import GNSSData
 from math import pi
 
 """ 
@@ -68,16 +68,14 @@ def observe(points,map,SSLB, mu_,msr_noise):
         GNSS readings from receiver 
     """
     #first get the satellite locations with blank signal readings
-    observations=locateSatellites(points,map)
-    bounded = boundElevations(observations) 
-    bounded['fresnel']= map.fresnel(bounded)
-
+    observations=locate_satellites(points,map)
+    bounded = bound_elevations(observations) 
+    bounded.loc[:,'fresnel']= map.fresnel(bounded)
     #model the signal
-    observations.ss, observations.pr = modelSignal(observations, SSLB,mu_,msr_noise)
+    bounded.loc[:,'ss'], bounded.loc[:,'pr'] = model_signal(bounded, SSLB,mu_,msr_noise)
+    return bounded
 
-    return observations
-
-def modelSignal(observations, SSLB=10, mu_=35,msr_noise=5):
+def model_signal(observations, SSLB=10, mu_=35,msr_noise=5):
     """
     Parameters
     ----------
@@ -113,8 +111,8 @@ def modelSignal(observations, SSLB=10, mu_=35,msr_noise=5):
     # b=nu/sigma
     
     # rice_=rice(b,scale=sigma)
-    # isLos_ = self.map.isLos(observations)
-    # ss_ = np.where(isLos_,rice.rvs(2, scale=10, size=len(isLos_)), lognorm.rvs(18, scale=10, size=len(isLos_)))
+    # is_los_ = self.map.is_los(observations)
+    # ss_ = np.where(is_los_,rice.rvs(2, scale=10, size=len(is_los_)), lognorm.rvs(18, scale=10, size=len(is_los_)))
     
     mus = mu_ - observations.fresnel
     sigmas=np.ones_like(observations.ss)*msr_noise
@@ -125,15 +123,15 @@ def modelSignal(observations, SSLB=10, mu_=35,msr_noise=5):
 
     return ss, pr
 
-def boundElevations(observations):
+def bound_elevations(observations):
     """ remove elevations outside of 0 or 85 degrees/1.48 rad
     """
     height=observations["sv_z"]-observations["z"]
     distance=np.linalg.norm(observations[["sv_x","sv_y"]].to_numpy()-observations[["x","y"]].to_numpy(),axis=1)
     elevation = np.arctan2(height,distance)
-    return observations[(elevation>0) & (elevation <85/360*2*pi)]
+    return observations.loc[(elevation>0) & (elevation <85/360*2*pi),:].copy()
 
-def locateSatellites(points,map):
+def locate_satellites(points,map):
     """ generate an set of satellite observations without signal readings.
     Parameters
     ----------
@@ -150,12 +148,10 @@ def locateSatellites(points,map):
     sv = SVIDS.repeat(points.shape[0])
     points_=pd.concat([points]* SVIDS.shape[0],ignore_index=True)
     data=GNSSData()
-
-    wgs = data.satLocation(sv,points_.t)
+    wgs = data.locate_satellites(sv,points_.t)
     missing=np.isnan(wgs[:,0])
     points_=points_.loc[~missing]
     wgs = wgs[~missing,:]
     sv=sv[~missing]
     sv_points= map.clip(points_,wgs)
-    
     return Observations(points_.x,points_.y,points_.z,points_.t,sv,*sv_points.T)

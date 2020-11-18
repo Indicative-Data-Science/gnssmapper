@@ -1,11 +1,9 @@
 """
 4 Parameter Logistic Regression
 """
-
 import numpy as np
 from scipy.optimize import minimize, Bounds
 from itertools import islice
-
 
 class FourParamLogisticRegression:
     """ 4 Paramater Logistic Regression Model as described in:
@@ -59,7 +57,7 @@ class FourParamLogisticRegression:
 
         Returns
         -------
-        self : object
+        params: [n,4] array of 4PL paramters where data points
         """
         param=[]
         for pos in range(0,X.shape[0],self.batch_size):
@@ -81,7 +79,7 @@ class FourParamLogisticRegression:
                 self.b = max(1e-2,self.b - (self.lr[1] * delta_b))
                 self.c = max(1e-3,self.c - (self.lr[2] * delta_c))
                 self.d = min(0.5 - 1e-3, max(1e-3, self.d - (self.lr[3] * delta_d)))
-            param.append([self.a,self.b,self.c,self.d])
+            param.extend([[self.a,self.b,self.c,self.d] for _ in range(self.batch_size)])
 
         return np.array(param)
 

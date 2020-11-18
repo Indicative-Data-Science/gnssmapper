@@ -5,11 +5,10 @@ import random
 from shapely.geometry import box, Point
 """ 
 =========================================
-Receiver Simulator for GNSS Map data collection 
+Recording Process Simulator 
 =========================================
 
-This module simulates different collection processes for obtaining GNSS data
-
+This module simulates different spatiotemporal processes for recording GNSS observations
 
 """
 # helper function to construct [num_samples,[x,y,z,t]] dataframe
@@ -53,7 +52,7 @@ def xy_point_process(map,polygon,num_samples):
 
     while n > 0:
         p = np.random.random((n,2)) * np.array([[maxx-minx,maxy-miny]]) + np.array([[minx,miny]]) 
-        outside = p[map.isOutside(p,polygon),:]
+        outside = p[map.is_outside(p,polygon),:]
         xy= np.vstack((xy,outside))
         n = num_samples - xy.shape[0]
 
@@ -93,7 +92,7 @@ def point_process(map, time_bound, num_samples=1000, polygon = None, receiver_of
         polygon= box(*map.bbox)
 
     xy = xy_point_process(map,polygon,num_samples)
-    z = map.groundLevel(xy) + receiver_offset
+    z = map.ground_level(xy) + receiver_offset
     t = time_bound[0] + (time_bound[1]-time_bound[0]) * np.random.random(num_samples) # from 00:00 to 20:00 to match the readings from 1 sp3 file and because there is a index error on the get_svid function
     return ReceiverPoints(xy[:,0],xy[:,1],z,t)
 
@@ -149,13 +148,13 @@ def random_walk(map, time_bound, num_samples: int = 1000, polygon = None, receiv
             tempx += x_
             tempy += y_
             temps += 1
-            if temps%sampling_rate == 0 and map.isOutside(np.array([[tempx,tempy]])):
+            if temps%sampling_rate == 0 and map.is_outside(np.array([[tempx,tempy]])):
                 x.append(tempx)
                 y.append(tempy)
                 s.append(temps)
 
     xy = np.column_stack((x, y))
-    z = map.groundLevel(xy) + receiver_offset
+    z = map.ground_level(xy) + receiver_offset
 
     time_range = np.array(np.timedelta64(time_bound[1] - time_bound[0],'s'),dtype=int)
     bounded_s = np.mod(s,time_range)
