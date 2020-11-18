@@ -1,7 +1,8 @@
 #**GNSS Simulation**
 
-To run the simulation, fill in the experiment parameters
-of config.yaml and run orchestration.py. 
+To run the simulation, create the experiment parameters as a yaml file (see template.yaml)
+and execute run.py as a module with yaml filepath as an argument e.g 
+python3 -m run data/configs/my_experiment.yaml 
 
 --- 
 #### Observation Emulation
@@ -13,10 +14,6 @@ There are four types of experiments:
  3) N/E/S/W split of the square ring. Square thickness and 
  width needs to specified along with the desired orientation.
  4) Random walk for a chosen start time and given sampling frequency.
- 
-The gen_receiver_points method in the orchestration script
-will return a dictionary of receiver points and corresponding
-GNSS observations for each experiment type. 
 
 --- 
 #### Map Algorithm

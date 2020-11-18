@@ -71,9 +71,8 @@ def save_data(fpath,data) ->None:
 
 
 def generate_data(map,observations):
-    data={}
-    data['ss'] = observations['ss'].to_numpy()
-    data['z'] = map.projected_height(observations)
+    data = map.projected_height(observations)
+    data.insert(0,'ss',observations['ss'].to_numpy())
     return data
 
 
@@ -159,10 +158,10 @@ def fit_offline(data,starting_params_,convergence_limit=[0.01,0.01,0.01,0.01]):
         SSLR.fit_offline(ss, y)
         param.append([[SSLR.a,SSLR.b,SSLR.c,SSLR.d],[HeightLR.a,HeightLR.b,HeightLR.c,HeightLR.d]])
         count+=1
-        converged =test_convergence(param,convergence_limit)
+        converged =check_convergence(param,convergence_limit)
     return np.array(param) 
 
-def test_convergence(param,limits):
+def check_convergence(param,limits):
     current = param[-1,1,:]
     prior = param[-2,1,:]
     return all([abs(x-y)<l for x,y,l in zip(current,prior,limits)])
