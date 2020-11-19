@@ -1,0 +1,52 @@
+#which modules to run. if a module is not run, the necessary data is loaded from preceding module filename
+run_modules:
+  receiver: False
+  gnss: False
+  model_signal: True
+  mapalgo: False
+
+#Base Case - uses when not specified in the experiment
+default_settings:
+  receiver:
+    method: point_process
+    filename: data/receiver_points/default.gz
+    map: data/map/box.txt
+    time_bound_lb: 2020-02-11T00:00
+    time_bound_ub: 2020-02-11T23:59
+    num_samples: 1000
+    polygon: 
+    receiver_offset: 1.0
+    avg_speed: 0.1
+    sampling_rate: 5 
+
+  gnss:
+    filename: data/observations/default.gz
+    map: data/map/box.txt
+    sslb: 10
+    mu_: 45
+    msr_noise: 5
+  
+  model_signal:
+    filename: data/observations/default.gz
+    sslb: 10
+    mu_: 45
+    msr_noise: 5
+
+  mapalgo:
+    filename: data/algorithm/default.gz
+
+# Settings for the experiments
+
+experiments:
+  base_case:
+
+  model_signal_1:
+    model_signal:
+      filename: data/observations/10db_noise.gz
+      msr_noise: 10
+  
+  model_signal_2:
+    model_signal:
+      filename: data/observations/15db_noise.gz
+      msr_noise: 15
+  

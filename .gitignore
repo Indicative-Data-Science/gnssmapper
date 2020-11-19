@@ -1,4 +1,7 @@
 __pycache__/
-data/
+data/sp3/
+data/orbits/
+data/receiver_points/
+Data/observations/
 .vscode/
 analysis/
