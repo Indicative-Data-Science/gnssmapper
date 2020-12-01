@@ -1,8 +1,14 @@
-#which modules to run. if a module is not run, the necessary data is loaded from preceding module filename
+#which modules to run. if a module is not run, the necessary data is loaded from preceding module filename. NB the map data module uses the model signal output not the GNSS output
 run_modules:
+#generates receiver points
   receiver: False
-  gnss: False
+#generates observations 
+  gnss: False 
+#recalculates observations without redoing geometric operations - uses existing fresnel calculation. 
   model_signal: True
+#generates map algo data without running the algorithm
+  mapalgo_intersections: False
+#runs the map algorithm
   mapalgo: False
 
 #Base Case - uses when not specified in the experiment
@@ -13,7 +19,7 @@ default_settings:
     map: data/map/box.txt
     time_bound_lb: 2020-02-11T00:00
     time_bound_ub: 2020-02-11T23:59
-    num_samples: 1000
+    num_samples: 50000
     polygon: 
     receiver_offset: 1.0
     avg_speed: 0.1
@@ -32,8 +38,14 @@ default_settings:
     mu_: 45
     msr_noise: 5
 
+  mapalgo_intersections:
+    map: "data/map/box.txt"
+    filename: "data/algo_intersections/default.gz"
+
   mapalgo:
-    filename: data/algorithm/default.gz
+    map: "data/map/box.txt"
+    filename: "data/algo_results/default.gz"
+
 
 # Settings for the experiments
 

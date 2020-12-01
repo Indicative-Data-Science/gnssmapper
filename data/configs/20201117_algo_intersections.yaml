@@ -1,13 +1,13 @@
 #which modules to run. if a module is not run, the necessary data is loaded from preceding module filename. NB the map data module uses the model signal output not the GNSS output
 run_modules:
 #generates receiver points
-  receiver: True
+  receiver: False
 #generates observations 
-  gnss: True 
+  gnss: False 
 #recalculates observations without redoing geometric operations - uses existing fresnel calculation. 
   model_signal: False
 #generates map algo data without running the algorithm
-  mapalgo_intersections: False
+  mapalgo_intersections: True
 #runs the map algorithm
   mapalgo: False
 
@@ -53,135 +53,124 @@ experiments:
   base_case:
 
   distances_1:
-    receiver: 
-      polygon: data/map/poly_donut_side_20_width_1.txt
-      filename: data/receiver_points/poly_donut_side_20_width_1.gz
-    gnss:
+    model_signal:
       filename: data/observations/poly_donut_side_20_width_1.gz
-  
+    mapalgo_intersections:
+      filename: "data/algo_intersections/poly_donut_side_20_width_1.gz"
+
   distances_2:
-    receiver: 
-      polygon: data/map/poly_donut_side_30_width_1.txt
-      filename: data/receiver_points/poly_donut_side_30_width_1.gz
-    gnss:
+    model_signal:
       filename: data/observations/poly_donut_side_30_width_1.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/poly_donut_side_30_width_1.gz"      
 
   distances_3:
-    receiver: 
-      polygon: data/map/poly_donut_side_40_width_1.txt
-      filename: data/receiver_points/poly_donut_side_40_width_1.gz
-    gnss:
+    model_signal:
       filename: data/observations/poly_donut_side_40_width_1.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/poly_donut_side_40_width_1.gz"
 
   distances_4:
-    receiver: 
-      polygon: data/map/poly_donut_side_50_width_1.txt
-      filename: data/receiver_points/poly_donut_side_50_width_1.gz
-    gnss:
+    model_signal:
       filename: data/observations/poly_donut_side_50_width_1.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/poly_donut_side_50_width_1.gz"
 
   distances_5:
-    receiver: 
-      polygon: data/map/poly_donut_side_30_width_2.txt
-      filename: data/receiver_points/poly_donut_side_30_width_2.gz
-    gnss:
+    model_signal:
       filename: data/observations/poly_donut_side_30_width_2.gz
-
+    mapalgo_intersections:
+      filename: "data/algo_intersections/poly_donut_side_30_width_2.gz"
+  
   distances_6:
-    receiver: 
-      polygon: data/map/poly_donut_side_30_width_4.txt
-      filename: data/receiver_points/poly_donut_side_30_width_4.gz
-    gnss:
+    model_signal:
       filename: data/observations/poly_donut_side_30_width_4.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/poly_donut_side_30_width_4.gz"  
 
   distances_7:
-    receiver: 
-      polygon: data/map/poly_donut_side_30_width_8.txt
-      filename: data/receiver_points/poly_donut_side_30_width_8.gz
-    gnss:
+    model_signal:
       filename: data/observations/poly_donut_side_30_width_8.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/poly_donut_side_30_width_8.gz"  
 
   times_1:
-    receiver: 
-      time_bound_lb: 2020-02-11T09:00
-      time_bound_ub: 2020-02-11T10:00
-      filename: data/receiver_points/time_1_hour.gz
-    gnss:
+    model_signal:
       filename: data/observations/time_1_hour.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/time_1_hour.gz"  
 
   times_2:
-    receiver: 
-      time_bound_lb: 2020-02-11T09:00
-      time_bound_ub: 2020-02-11T11:00
-      filename: data/receiver_points/time_2_hour.gz
-    gnss:
+    model_signal:
       filename: data/observations/time_2_hour.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/time_2_hour.gz"  
 
   times_3:
-    receiver: 
-      time_bound_lb: 2020-02-11T09:00
-      time_bound_ub: 2020-02-11T12:00
-      filename: data/receiver_points/time_3_hour.gz
-    gnss:
+    model_signal:
       filename: data/observations/time_3_hour.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/time_3_hour.gz"
 
   directions_1:
-    receiver: 
-      polygon: data/map/north.txt
-      filename: data/receiver_points/north.gz
-    gnss:
+    model_signal:
       filename: data/observations/north.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/north.gz"  
 
   directions_2:
-    receiver: 
-      polygon: data/map/east.txt
-      filename: data/receiver_points/east.gz
-    gnss:
+    model_signal:
       filename: data/observations/east.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/east.gz"  
 
   directions_3:
-    receiver: 
-      polygon: data/map/south.txt
-      filename: data/receiver_points/south.gz
-    gnss:
+    model_signal:
       filename: data/observations/south.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/south.gz"  
 
   directions_4:
-    receiver: 
-      polygon: data/map/west.txt
-      filename: data/receiver_points/west.gz
-    gnss:
+    model_signal:
       filename: data/observations/west.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/west.gz"        
 
   random_walks_1:
-    receiver: 
-      method: random_walk
-      sampling_rate: 1
-      filename: data/receiver_points/random_walk_1_second.gz
-    gnss:
+    model_signal:
       filename: data/observations/random_walk_1_second.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/random_walk_1_second.gz"  
 
   random_walks_2:
-    receiver: 
-      method: random_walk
-      sampling_rate: 10
-      filename: data/receiver_points/random_walk_10_second.gz
-    gnss:
+    model_signal:
       filename: data/observations/random_walk_10_second.gz
-
+    mapalgo_intersections:
+      filename: "data/algo_intersections/random_walk_10_second.gz"  
+  
   random_walks_3:
-    receiver: 
-      method: random_walk
-      sampling_rate: 60
-      filename: data/receiver_points/random_walk_1_minute.gz
-    gnss:
+    model_signal:
       filename: data/observations/random_walk_1_minute.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/random_walk_1_minute.gz"
 
   random_walks_4:
-    receiver: 
-      method: random_walk
-      sampling_rate: 600
-      filename: data/receiver_points/random_walk_10_minute.gz
-    gnss:
+    model_signal:
       filename: data/observations/random_walk_10_minute.gz
+    mapalgo_intersections:
+      filename: "data/algo_intersections/random_walk_10_minute.gz"  
 
+  model_signal_1:
+    model_signal:
+      filename: data/observations/10db_noise.gz
+      msr_noise: 10
+    mapalgo_intersections:
+      filename: "data/algo_intersections/10db_noise.gz"  
+  
+  model_signal_2:
+    model_signal:
+      filename: data/observations/15db_noise.gz
+      msr_noise: 15
+    mapalgo_intersections:
+      filename: "data/algo_intersections/15db_noise.gz"  
+  

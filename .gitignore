@@ -2,6 +2,7 @@ __pycache__/
 data/sp3/
 data/orbits/
 data/receiver_points/
-Data/observations/
+data/algo_intersections/
+data/observations/
 .vscode/
 analysis/

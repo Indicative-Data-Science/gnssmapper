@@ -4,6 +4,7 @@ import simulator.map as mp
 import simulator.receiver as rec
 from shapely.wkt import loads
 import simulator.gnss as gnss
+import algorithms.mapAlgo as algo
 import pandas as pd
 import numpy as np
 import yaml
@@ -32,6 +33,9 @@ def run_experiments(config: dict):
         if config["run_modules"]["model_signal"]:
             print("running model signal")
             run_model_signal(settings)
+        if config["run_modules"]["mapalgo_intersections"]:
+            print("running map algo intersections")
+            run_mapalgo_intersections(settings)
         if config["run_modules"]["mapalgo"]:
             print("running map algo")
             run_mapalgo(settings)
@@ -72,8 +76,16 @@ def run_model_signal(settings: dict):
     if not check_settings_valid(dic,"model_signal"):
         return None
     obs = pd.read_csv(settings['gnss']['filename'],parse_dates=['t'])
-    output = gnss.model_signal(obs,dic["sslb"],dic['mu_'],dic['msr_noise'])
-    output.to_csv(dic['filename'],index=False)
+    obs.ss,obs.pr = gnss.model_signal(obs,dic["sslb"],dic['mu_'],dic['msr_noise'])
+    obs.to_csv(dic['filename'],index=False)
+
+def run_mapalgo_intersections(settings: dict):
+    dic = settings["mapalgo_intersections"]
+    if not check_settings_valid(dic,"mapalgo_intersections"):
+        return None
+    obs = pd.read_csv(settings['model_signal']['filename'],parse_dates=['t'])
+    map_ = mp.Map(dic['map'])
+    algo_ = algo.MapAlgorithm(map_,dic['filename'],obs) #this automatically calculates and saves
 
 def run_mapalgo(settings: dict):
     return None
@@ -82,6 +94,7 @@ def check_settings_valid(dic: dict,module: str):
     expected = {"receiver": ["method","filename", "map","time_bound_lb","time_bound_ub","num_samples","polygon","receiver_offset","avg_speed","sampling_rate"],
                 "gnss":     ["filename","map","sslb", "mu_","msr_noise"],
                 "model_signal": ["filename","sslb", "mu_","msr_noise"],
+                "mapalgo_intersections": ["map","filename"],
     }
 
     return all([i==j for i,j in zip(expected[module],dic.keys())])

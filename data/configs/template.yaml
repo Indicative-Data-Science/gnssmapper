@@ -1,11 +1,17 @@
-#which modules to run. if a module is not run, the necessary data is loaded from preceding module filename
+#which modules to run. if a module is not run, the necessary data is loaded from preceding module filename. NB the map data module uses the model signal output not the GNSS output
 run_modules:
+#generates receiver points
   receiver: False
-  gnss: False
+#generates observations 
+  gnss: False 
+#recalculates observations without redoing geometric operations - uses existing fresnel calculation. 
   model_signal: False
+#generates map algo data without running the algorithm
+  mapalgo_intersections: False
+#runs the map algorithm
   mapalgo: False
 
-#Base Case - uses when not specified in the experiment
+#default settings - used when not specified in the experiment
 default_settings:
   receiver:
     method: point_process
@@ -20,20 +26,25 @@ default_settings:
     sampling_rate: 5 
 
   gnss:
-    filename: "data/observations/default.csv"
+    filename: "data/observations/default.gz"
     map: "data/map/box.txt"
     SSLB: 10
     mu_: 45
     msr_noise: 5
   
   model_signal:
-    filename: "data/observations/default.csv"
+    filename: "data/observations/default.gz"
     SSLB: 10
     mu_: 45
     msr_noise: 5
 
+  mapalgo_intersections:
+    map: "data/map/box.txt"
+    filename: "data/algo_intersections/default.gz"
+
   mapalgo:
-    filename: "data/algorithm/default.csv"
+    map: "data/map/box.txt"
+    filename: "data/algo_results/default.gz"
 
 # Settings for the experiments
 
@@ -98,31 +109,3 @@ Experiment_4:
   start_time: 9
   sampling_rate: 1
 
-
-# Example config
-
-#Experiment_1 :
-# Square ring of width 30m and thickness 4m
-#  perform: True
-#  polygon_length: 30
-#  polygon_thickness: 4
-#
-#Experiment_2:
-# Random walk starting at 9am bounded to 11am.
-#  perform: True
-#  #9am time start with an hour bound example below
-#  start_time: 9
-#  interval_length: 2
-#
-#Experiment_3:
-# Square ring with width 30m and thickness 2m oriented North
-#  perform: False
-#  polygon_length: 30
-#  polygon_thickness: 2
-#  orientation: North
-#
-#Experiment_4:
-# Random walk starting at 9am with minute readings.
-#  perform: True
-#  start_time: 9
- #sampling_rate: 60
