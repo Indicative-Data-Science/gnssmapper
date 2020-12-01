@@ -130,7 +130,8 @@ class FourParamLogisticRegression:
         for pos in range(0,xhat.shape[0],self.batch_size):
             self.batch_update(xhat[pos:pos+self.batch_size],ytrue[pos:pos+self.batch_size])
             param.append([self.a,self.b,self.c,self.d])
-        param_repeated =[param[floor(tally/self.batch_size)] for tally in accumulate(valid)]  #this is surprisngly slow - 2/3rds of overall time!
+        idx = np.floor(np.cumsum(valid)/self.batch_size).astype('int')
+        param_repeated =[param[i] for i in idx]  #this is surprisngly slow - takes as long as all batchs update. 
         param_repeated[-1]=param[-1] #takes into account the short last update
         return param_repeated
 
