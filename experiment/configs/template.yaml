@@ -1,0 +1,111 @@
+#which modules to run. if a module is not run, the necessary data is loaded from preceding module filename. NB the map data module uses the model signal output not the GNSS output
+run_modules:
+#generates receiver points
+  receiver: False
+#generates observations 
+  gnss: False 
+#recalculates observations without redoing geometric operations - uses existing fresnel calculation. 
+  model_signal: False
+#generates map algo data without running the algorithm
+  mapalgo_intersections: False
+#runs the map algorithm
+  mapalgo: False
+
+#default settings - used when not specified in the experiment
+default_settings:
+  receiver:
+    method: point_process
+    filename: "data/receiver_points/default.csv"
+    map: "data/map/box.txt"
+    time_bound_lb: "2020-02-11T00:00"
+    time_bound_ub: "2020-02-11T23:59"
+    num_samples: 1000
+    polygon: None
+    receiver_offset: 1.0
+    avg_speed: 0.1
+    sampling_rate: 5 
+
+  gnss:
+    filename: "data/observations/default.gz"
+    map: "data/map/box.txt"
+    SSLB: 10
+    mu_: 45
+    msr_noise: 5
+  
+  model_signal:
+    filename: "data/observations/default.gz"
+    SSLB: 10
+    mu_: 45
+    msr_noise: 5
+
+  mapalgo_intersections:
+    map: "data/map/box.txt"
+    filename: "data/algo_intersections/default.gz"
+
+  mapalgo:
+    map: "data/map/box.txt"
+    filename: "data/algo_results/default.gz"
+
+# Settings for the experiments
+
+experiments:
+  base_case:
+
+  distances_1:
+    receiver: 
+      polygon:
+      filename:
+    gnss:
+      filename:
+  
+  times_1:
+    receiver: 
+      time_bound_lb: "2020-02-11T00:00"
+      time_bound_ub: "2020-02-11T23:59"
+      filename:
+    gnss:
+      filename:
+
+  directions_1:
+    receiver: 
+      polygon:
+      filename:
+    gnss:
+      filename:
+
+  random_walks_1:
+    receiver: 
+      method:
+      sampling_rate:
+      filename:
+    gnss:
+      filename:
+
+  signal_noise_1:
+    gnss:
+      msr_noise:
+      filename:
+    
+
+
+  polygon_length: 20
+  polygon_thickness: 2
+
+Experiment_2:
+  perform: True
+  #9am time start with an hour bound example below
+  start_time: 9
+  interval_length: 1
+  sampling_rate: 1
+
+Experiment_3:
+  perform: True
+  polygon_length: 30
+  polygon_thickness: 2
+  orientation: North
+
+Experiment_4:
+  perform: True
+  start_time: 9
+  sampling_rate: 1
+

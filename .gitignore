@@ -1,8 +1,9 @@
 __pycache__/
-data/sp3/
-data/orbits/
-data/receiver_points/
-data/algo_intersections/
-data/observations/
+gnssmapper/data/sp3/
+gnssmapper/data/orbits/
+experiment/receiver_points/
+experiment/algo_intersections/
+experiment/observations/
 .vscode/
 analysis/
+examples/
