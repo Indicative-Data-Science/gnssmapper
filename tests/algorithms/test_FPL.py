@@ -7,6 +7,7 @@ import pandas.testing as pt
 from itertools import product
 import numpy as np
 import math
+from scipy.special import expit
 
 class TestFPL(unittest.TestCase):
     def setUp(self) -> None:
@@ -47,8 +48,8 @@ class TestFPL(unittest.TestCase):
         self.assertAlmostEqual(updates,0)
 
     def test_fit_offline(self) -> None:
-        X=np.arange(-20,20)
-        Y=np.array([1,0]*20)
+        X=np.arange(0,100)
+        Y=np.array([1,0]*50)
         np.random.shuffle(Y)
 
         self.fpl.fit_offline(X,Y)
@@ -58,7 +59,7 @@ class TestFPL(unittest.TestCase):
         def neg_log_likelihood(theta, X, y):
             m = X.shape[0]
             denom_ = 1 + np.exp( - theta[1] * (X - theta[2]) )
-            yhat = theta[3] + (theta[0] - theta[3])/denom_
+            yhat = theta[3] + (theta[0] - theta[3]) *expit(theta[1] * (X - theta[2]) )
             return -(1 / m) * np.sum(y*np.log(yhat) + (1 - y)*np.log(1 - yhat))
 
         min_ = neg_log_likelihood(theta,X,Y)

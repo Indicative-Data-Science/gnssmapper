@@ -68,10 +68,9 @@ class TestMapAlgorithm(unittest.TestCase):
         data=alg_.visible('0')
         batch=80
         SGD_batch=50
-        params=fit(data,[[0.8,1.,2.,0.2],[0.8,1.,2.,0.2]],True,batch=batch,iterations=1000)
+        params=fit(data,[[0.8,1.,2.,0.2],[0.8,1.,2.,0.2]],False,batch=batch,iterations=1000)
         [npt.assert_almost_equal(params[i-1,:,:],params[i,:,:]) for i in range(1,300) if i not in {79,159,239,299}]
-        params=fit(data,[[0.8,1.,2.,0.2],[0.8,1.,2.,0.2]],True,batch=225,iterations=300,SGD_batch=SGD_batch)
-        [npt.assert_almost_equal(params[i-1,:,:],params[i,:,:]) for i in range(1,300) if i not in {49,99,149,199,224,274,299}]
+
         
     # def test_check_convergence(self):
     #     param_pass=[[[0.8,1.,2.,0.2],[0.8,1.,2.,0.2]],[[0.8,1.,2.,0.2],[0.8,1.,2.,0.2]]]
