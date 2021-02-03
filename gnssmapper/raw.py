@@ -189,5 +189,5 @@ def join_receiver_position(gnss_obs: pd.DataFrame, gnss_fix: pd.DataFrame) ->gpd
             f"{len(gnss_obs)-len(df)} observations discarded without matching fix."
         )
     gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(
-        df["Latitude"], df["Longitude"], df["Altitude"]), crs='EPSG:4979')
+        df["Latitude"], df["Longitude"], df["Altitude"]), crs=constants.epsg_gnss_logger)
     return gdf

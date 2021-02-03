@@ -11,6 +11,9 @@ from pandas import to_datetime, DataFrame
 # minimum version of gnsslogger
 minimum_version = "1.4.0.0"
 
+#supported constellations
+supported_constellations = set("G","R","C","E")
+
 # IGS constellation identifiers
 constellation_numbering = {1: "G", 3: "R", 5: "C", 6: "E"}
 
@@ -22,8 +25,11 @@ required_states = {
     'E': [1, 8, 2048],
 }
 
+epsg_gnss_logger='EPSG:4979'
 
-# number of nanonseconds in a gnss period
+""" GNSS constants """
+
+# number of nanoseconds in a gnss period
 nanos_in_period = {
     'G': 604800 * 1e9,
     'R': 86400 * 1e9,
@@ -39,12 +45,14 @@ constellation_epoch_offset = {
     'E': -10800*1e9 + 18*1e9,
 }
 
-# starting epoch for gps
-gps_epoch = to_datetime('1980-01-06', format="%Y-%m-%d")
-
 # lightspeed in m/s
 lightspeed = 299792458
 
+nanos_in_day = 86400 * 1e9
+
+""" GPS and UTC conversion"""
+# starting epoch for gps
+gps_epoch = pd.to_datetime('1980-01-06', format="%Y-%m-%d")
 
 def leap_seconds(time) -> int:
     """gps leap seconds."""
@@ -57,3 +65,10 @@ def leap_seconds(time) -> int:
                                                                          format="%Y-%m-%d")) for s, f in zip(ls_dates, ls_ends)]
     ls_dic = dict(zip(ls_daterange, ls))
     return ls_dic[time]
+
+epsg_satellites = 'EPSG:4978'
+epsg_wgs84 = 'EPSG:4979'
+epsg_wgs84_cart = 'EPSG:4978'
+ray_length = 1000
+minimum_elevation = 0
+maximum_elevation = 85
