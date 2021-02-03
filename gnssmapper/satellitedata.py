@@ -1,15 +1,15 @@
 """ 
-=========================================
-GNSS Data 
-=========================================
-
-This module calculates GNSS signal information from GNSS raw data. It defines a class to avoid reloading the data each time the function is called.
+This module contains methods for calculating satellite positions using IGS ephemeris data. It defines a class to avoid reloading the data each time the function is called.
 
 """
 
 import json
 import bisect
-from collections import defaultdict,OrderedDict
+import constants
+import gpstime
+import warnings
+from collections import defaultdict, OrderedDict
+from typing import Tuple
 
 import pandas as pd
 import numpy as np
@@ -25,19 +25,19 @@ from scipy.interpolate import lagrange
 from numpy.polynomial import polynomial as P
 
 
-class GNSSData:
-    def __init__(self,orbits_filepath="data/orbits/"):
+class SatelliteData:
+    def __init__(self, orbits_filepath: str = "data/orbits/"):
         self.orbits_filepath = orbits_filepath
-        self.orbits= defaultdict(dict)
+        self.orbits = defaultdict(dict)
 
     @property
-    def metadata(self):
-        filenames = [ f for f in (os.listdir(self.orbits_filepath)) if re.match("orbits_",f)]
-        days=[re.split('_|\.',f)[1] for f in filenames]
-        
+    def metadata(self) -> set:
+        filenames = [f for f in (os.listdir(
+            self.orbits_filepath)) if re.match("orbits_", f)]
+        days = [re.split('_|\.', f)[1] for f in filenames]
         return set(days)
 
-    def load_orbit(self,day):
+    def load_orbit(self, day: str) -> dict:
         try:
             with open(self.orbits_filepath+get_filename(day)) as json_file:
                 data = json.load(json_file)
@@ -46,182 +46,231 @@ class GNSSData:
         except IOError:
             return dict()
 
-    def save_orbit(self,day,data) ->None:
+    def save_orbit(self, day: str, data: dict) -> None:
         with open(self.orbits_filepath+get_filename(day), 'w') as outfile:
-            json.dump(data, outfile,indent=4)
+            json.dump(data, outfile, indent=4)
 
+    def name_satellites(self, times: pd.Series) -> pd.Series:
+        """Provides the svids for satellites tracked in IGS ephemeris data.
 
-    def locate_satellites(self,sv,times):
-        """ returns satellite locations
         Parameters
         ----------
-        sv : [n,] string array 
-            satellite ids
-        times: [n,] np.datetime64 array
-            utc time of observation
+        time : pd.Series(dtype=int)
+            gps time
+
         Returns
         -------
-        location : [n,3] array 
-            location in wgs84 cartesian co-ords 
+        pd.Series(dtype=list[str])
+            a list of svids visible at each point in time, indexed by time
         """
-        transmitted = estimate_measurement_time(times,sv) #vectorise  
-        days,gpstimes = utc_to_dayofyear(transmitted)
+        # assuming list of svids is static over a day
+        days, _ = gpstime.gps_to_doy(time)['date']
+
         self.update_orbits(days)
-        return np.array([self.locate_sat(d,t,s) for d,t,s in zip(days,gpstimes,sv)])
 
-    def locate_sat(self,day:str, time: float, svid: str)-> list:
-        """ returns satellite location
+        return pd.Series(days.map(lambda x: [self.orbits[x].keys()]), name='svid', index=times)
+
+    def locate_satellites(self, svid: pd.Series, time: pd.Series) -> pd.DataFrame:
+        """Returns satellite location in geocentric WGS84 coordinate.
+
+        Calls _locate_sat function, updating ephemeris files if needed.
+
         Parameters
         ----------
-        svid: satellite ids
-        day: doy format 
-        time: time of day in ns 
+        svid : pd.Series(dtype=str)
+            svid in IGS format e.g. "G01"
+        time : pd.Series(dtype=int)
+            gps time
         Returns
         -------
-        location : xyz in wgs84 cartesian co-ords 
+        pd.DataFrame
+            xyz in geocentric wgs84 co-ords 
         """
-        
-        if day not in self.orbits or svid not in self.orbits[day]:
-            return [np.nan,np.nan,np.nan]
 
-        keys= [float(x) for x in self.orbits[day][svid]]
-        close = bisect.bisect_left(keys,time) #requires ordered dictionary in sorted order for keys
-        if close==0:
-            idx = close 
-        elif close ==len(keys):
+        doy = gpstime.gps_to_doy(time)
+        days = doy['date'],
+        nanos = doy['time']
+        self.update_orbits(days)
+        coords = pd.DataFrame([self._locate_sat(d, t, s)
+                               for d, t, s in zip(days, nanos, svid)],columns=['sv_x','sv_y','sv_z'])
+        return coords.assign({svid.name:svid.values, time.name:time.values})
+
+    def _locate_sat(self, day: str, time: float, svid: str) -> list:
+        """Returns satellite location in geocentric WGS84 coordinates.
+
+        Uses interpolation from a pre-calculated dictionary of coefficients. 
+
+        Parameters
+        ----------
+        day : str
+            day-of-year format
+        time : float
+            time of day in ns
+        svid : str
+            satellite ids
+
+        Returns
+        -------
+        list
+            xyz in wgs84 cartesian co-ords
+        """
+
+        if day not in self.orbits or svid not in self.orbits[day]:
+            warnings.warn(
+                f"orbit information not available for {svid} on {day}")
+            return [np.nan, np.nan, np.nan]
+
+        # Each day and svid has a nested dictionary of coeffeicients covering different periods of the day.
+        # Select the one that has a key closest to the required time.
+        # ordered dictionary in sorted order for keys
+        keys = [float(x) for x in self.orbits[day][svid]]
+        close = bisect.bisect_left(keys, time)
+        if close == 0:
+            idx = close
+        elif close == len(keys):
             idx = close-1
         else:
-            idx = min([close-1,close],key= lambda x: abs(keys[x]-time))
-            
+            idx = min([close-1, close], key=lambda x: abs(keys[x]-time))
+
         poly_dict = self.orbits[day][svid][list(self.orbits[day][svid])[idx]]
 
         if time > poly_dict['ub'] or time < poly_dict['lb']:
-            return [np.nan,np.nan,np.nan]
-    
+            warnings.warn(
+                f"Orbits available for {svid} on {day}, however a valid dictionary wasn't found at {time}")
+            return [np.nan, np.nan, np.nan]
+
         scaled_time = (time - poly_dict['mid'][0]) / poly_dict['scale'][0]
 
         def predict(dim):
-            n = ['x','y','z'].index(dim) + 1
-            return P.polyval(scaled_time, poly_dict[dim]) *poly_dict['scale'][n] + poly_dict['mid'][n]
+            n = ['x', 'y', 'z'].index(dim) + 1
+            return P.polyval(scaled_time, poly_dict[dim]) * poly_dict['scale'][n] + poly_dict['mid'][n]
 
-        return [predict(dim) for dim in ['x','y','z']]
+        return [predict(dim) for dim in ['x', 'y', 'z']]
 
-    def update_orbits(self,days):
-        """ loads orbits, updating orbit database where necessary
+    def update_orbits(self, days: pd.Series) -> None:
+        """Loads orbits, updating orbit database where necessary.
+
         Parameters
         ----------
-        days : np.array of string days in doy format.
+        days : pd.Series
+            days in YYYYdoy string format 
         """
-        days = set(days.flatten())
+        days = set(days.unique())
         missing_days = days - self.metadata
 
         for day in missing_days:
-            orbit_dic=defaultdict(dict)
+            orbit_dic = defaultdict(dict)
             sp3 = get_SP3_file(day)
             df = get_SP3_dataframe(sp3)
             unsorted_orbit = create_orbit(df)
-            for sv,dic in unsorted_orbit.items():
-                orbit_dic[sv]=OrderedDict(sorted(dic.items()))
-            self.save_orbit(day,orbit_dic)
-  
+            for svid, dic in unsorted_orbit.items():
+                orbit_dic[svid] = OrderedDict(sorted(dic.items()))
+            self.save_orbit(day, orbit_dic)
+
         for day in days:
-            if day not in self.orbits:  
-                self.orbits[day]=self.load_orbit(day)
-        
-def create_orbit(sp3_df: pd.DataFrame):
-    # creates Lagrangian 7th order polynomials for estimating location, generating estimates centred at every 4th data point
-    daystr,sp3_df['gpstime'] = utc_to_dayofyear(sp3_df['utctime'])
-    day = daystr.astype(int)
-    sp3_df['gpstime'] = sp3_df['gpstime']  + (day-min(day)) * 24* 3600 *1e9
-    sp3_df = sp3_df.sort_values(['svid','gpstime'])
+            if day not in self.orbits:
+                self.orbits[day] = self.load_orbit(day)
+
+
+def create_orbit(sp3_df: pd.DataFrame) -> dict:
+    """Creates a dictionary of Lagrangian 7th order polynomial coefficents used for interpolation. 
+
+    Estimates centred at every 4th data point, including lower and upper time bounds of validity, scaling parameters and lagrangian coeffecients.
+
+    Parameters
+    ----------
+    sp3_df : pd.DataFrame
+        includes x,y,z and time columns
+
+    Returns
+    -------
+    dict
+        {id:{midpoint of period: {dictionary of estimates}}}
+    """
+    day = sp3_df['date'].str[:4].astype(int)
+    sp3_df['gpstime'] = sp3_df['time'] + (day-min(day)) * 24 * 3600 * 1e9
+    sp3_df = sp3_df.sort_values(['svid', 'gpstime'])
     polyXYZ = defaultdict(dict)
 
     for id_ in sp3_df['svid'].unique():
-        orbits = sp3_df.loc[sp3_df['svid'] == id_,['gpstime','x','y','z']]
+        orbits = sp3_df.loc[sp3_df['svid'] == id_, ['gpstime', 'x', 'y', 'z']]
         idxs = list(range(3, len(orbits)-5, 4))
-        if idxs[-1]!=len(orbits)-5:
+        if idxs[-1] != len(orbits)-5:
             idxs.append(len(orbits)-5)
         for i in idxs:
-            k,v = poly_lagrange(i, orbits )
+            k, v = poly_lagrange(i, orbits)
             polyXYZ[id_][k] = v
-    
+
     return polyXYZ
 
-def poly_lagrange(i, alldata: pd.DataFrame):
-    """ returns lagrangian polynomial coefficients, along with scaling parameters used to avoid problems with numerically small coeffecients
+
+def poly_lagrange(i: int, alldata: pd.DataFrame) -> Tuple[float, dict]:
+    """Returns lagrangian polynomial coefficients, along with scaling parameters used to avoid problems with numerically small coeffecients.
+
     Parameters
     ----------
-    i : int 
+    i : int
         index of observation
-    alldata: [n,] pd.DataFrame with columns of  'gpstime', 'x', 'y', 'z', all simple floats
-        time of observation
+    alldata : pd.DataFrame
+        periodic observations of 'gpstime', 'x', 'y', 'z', all simple floats
+
     Returns
     -------
-    lower and upper time bounds of validity, scaling parameters and lagrangian coeffecients
-    
+    Tuple[float,dict]
+        float: midpoint of time validity
+        dict: lower and upper time bounds of validity, scaling parameters and lagrangian coeffecients
     """
     if i < 3 or i > len(alldata)-5:
         raise ValueError('"outside fit interval"')
     data = alldata.iloc[i-3:i+5, :].reset_index(drop=True)
-    lb, ub = data.iloc[0,0], data.iloc[7,0] 
-    mid = data.iloc[3,:]
+    lb, ub = data.iloc[0, 0], data.iloc[7, 0]
+    mid = data.iloc[3, :]
     scale = data.iloc[7, :] - data.iloc[0, :]
     scaled_data = (data - mid)/scale
 
     def coefs(dim: str) -> list:
-        return np.asarray(lagrange(scaled_data["gpstime"],scaled_data[dim])).tolist()[::-1] # why turned round
+        # why turned round
+        return np.asarray(lagrange(scaled_data["gpstime"], scaled_data[dim])).tolist()[::-1]
 
-    return [mid[0], {'lb': lb, 'ub': ub, 'mid': list(mid), 'scale': list(scale), 'x': coefs('x'), 'y': coefs('y'), 'z': coefs('z') } ]
+    return [mid[0], {'lb': lb, 'ub': ub, 'mid': list(mid), 'scale': list(scale), 'x': coefs('x'), 'y': coefs('y'), 'z': coefs('z')}]
 
-def estimate_measurement_time(time, svid):
-        # this estimates transmission time for a given epoch signal based on estimated satellite distance of 22,000 km
-        # except for Beidou GEO/IGSO which are estimated at 38,000km
-        # GPS_UTC_OFFSET <- as.integer(as.POSIXct('1980-01-06',tz="UTC"))
-        # GPS_UTC_LEAPSECONDS <- -18
-        LIGHTSPEED = 0.299792458 #metres per ns
-        BEIDOU_HIGH_SVID = ["C01", "C02", "C03", "C13", "C16", "C59", "C31", "C04", "C05", "C06", "C07", "C08", "C09",
-                           "C10", "C38", "C18", "C39", "C40"]
-        BEIDOU_HIGH = np.timedelta64(int(38000000 / LIGHTSPEED),'ns')
-        ORBIT = np.timedelta64(int(22000000 / LIGHTSPEED),'ns')
-        return np.where(np.isin(svid,BEIDOU_HIGH_SVID), time - BEIDOU_HIGH, time - ORBIT)
-     
-def get_filename(day:str)->str:
+
+def get_filename(day: str) -> str:
+
     return "orbits_"+day+".json"
 
-def utc_to_dayofyear(dates):
-    """Returns a doy format"""
-    year = np.datetime_as_string(dates,"Y")
-    doy = np.array([np.datetime64(date,"D") - np.datetime64(date,"Y")+1 for date in dates]).astype(int).astype(str)
-    ns = np.array([np.datetime64(date,"ns") - np.datetime64(date,"D") for date in dates]).astype(float)
-    yeardoy= np.char.add(year,np.char.zfill(doy,3))
-    return [yeardoy,ns]
 
-def dayofyear_to_GPS(yeardoy: str) -> dict:
-    """Return a GPS date given a doy input."""
-    year,doy = np.datetime64(yeardoy[:4],"Y"),yeardoy[4:]
-    gps_epoch = np.datetime64("1980-01-06","D") 
-    tdiff= (year-gps_epoch+np.timedelta64(int(doy)-1,'D')).astype(int)
-    gpsweek = tdiff // 7
-    gpsdays = tdiff - 7 * gpsweek
+def get_SP3_file(date: str, orbit_type='MGNSS') -> str:
+    """Loads a file of precise satellite orbits. 
 
-    return {'week': gpsweek, 'day': gpsdays}
+    Checks for local saved version otherwise fetches remotely. 
 
-def get_SP3_file(date_: str, kind='MGNSS'):
-    """ obtains a file of satellite orbits, fetching remotely if needed. 
-    
+    Parameters
+    ----------
+    date : str
+        date in YYYYdoy format
+    orbit_type : str, optional
+        type of precise orbit product {MGNSS, rapids}, by default 'MGNSS'
+
     Returns
     -------
-    text file with given format ftp://igs.org/pub/data/format/sp3c.txt
+    str
+        orbit file contents in string format
 
     """
     SP3_DATASITE = "http://navigation-office.esa.int/products/gnss-products/"
-    gpsdate = dayofyear_to_GPS(date_)
+    time = gpstime.doy_to_gps(pd.Series([date]), pd.Series([0]))
+    gpsdate = gpstime.gps_to_gpsweek(time)[0]
 
-    if kind == 'rapids':
-        filename= 'esu' + str(gpsdate['week']) + str(gpsdate['day']) + '_00.sp3.Z'
-    elif kind=='MGNSS':
-        filename = 'ESA0MGNFIN_' + date_ + '0000_01D_05M_ORB.SP3.gz'
-       
+    if orbit_type not in ['rapids', 'MGNSS']:
+        raise ValueError('invalid orbit type selected')
+
+    if orbit_type == 'rapids':
+        filename = 'esu' + str(gpsdate['week']) + \
+            str(gpsdate['day']) + '_00.sp3.Z'
+    elif orbit_type == 'MGNSS':
+        filename = 'ESA0MGNFIN_' + date + '0000_01D_05M_ORB.SP3.gz'
+
     url = SP3_DATASITE + str(gpsdate['week']) + '/' + filename
     local = str(os.getcwd()) + '/data/sp3/' + filename
     if not os.path.isfile(local):
@@ -230,39 +279,46 @@ def get_SP3_file(date_: str, kind='MGNSS'):
     # os.system('uncompress ' + str(filetype))
     # return filetype.replace('.Z', '')
 
-    if kind == 'MGNSS':
-        with gzip.open(local, 'rt',encoding='utf-8') as f:
+    if orbit_type == 'MGNSS':
+        with gzip.open(local, 'rt', encoding='utf-8') as f:
             file_content = f.read()
 
-    elif kind == 'rapids':
+    elif orbit_type == 'rapids':
         with open(local, 'rb') as f:
             binary_content = zlib.decompress(f.read())
             file_content = binary_content.decode('utf-8')
 
     return file_content
 
-def get_SP3_dataframe(sp3: str, kind='MGNSS'):
-    """ parse a precise orbits txt file to retrieve orbit data
+
+def get_SP3_dataframe(sp3: str) -> pd.DataFrame:
+    """Parse a precise orbits string to retrieve orbit data.
+
+    Format as given here ftp://igs.org/pub/data/format/sp3c.txt
+
     Parameters
     ----------
-    format as given here ftp://igs.org/pub/data/format/sp3c.txt
+    sp3 : str
+        precise orbits, e.g. read from a txt file.
 
     Returns
     -------
-    DataFrame [n,7] with columns of locations for each epoch and svid
-
+    pd.DataFrame
+        locations for each epoch and svid
     """
 
+    def get_date(row: str):
+        date = pd.Timestamp(year=row[3:7], month=row[8:10], day=row[11:13])
+        year = date.year.astype("str")
+        day = date.dayofyear.astype("str")
+        return year.str.cat(day.str.pad(3, side='left', fillchar="0"))
+
     def get_time(row: str):
-        year = row[3:7]
-        month = row[8:10].strip().zfill(2)
-        day = row[11:13].strip().zfill(2)
-        hour = row[14:16].strip().zfill(2)
-        min = row[17:19].strip().zfill(2)
-        sec = row[20:31].strip().zfill(11)
-        time_str = year + '-' + month + '-' + day + 'T' + hour + ':' + min + ':' + sec
-        utc_time = np.datetime64(time_str , 'ns')
-        return utc_time
+        hour = int(row[14:16])
+        min = int(row[17:19])
+        sec = int(row[20:31])
+        time = hour * 3600 + min * 60 + sec
+        return time * 1e9
 
     def getXYS(row):
         row_list = row.split()
@@ -284,13 +340,14 @@ def get_SP3_dataframe(sp3: str, kind='MGNSS'):
         if len(nstr) == 0:
             break
         if nstr[:2] == '* ':
-            utctime = get_time(nstr)
+            date = get_date(nstr)
+            time = get_time(nstr)
             epoch += 1
         if nstr[0] == 'P':
             pos = getXYS(nstr)
-            df_row = [epoch, utctime] + pos
+            df_row = [epoch, date, time] + pos
             results.append(df_row)
 
-    output = pd.DataFrame(results, columns=['epoch', 'utctime', 'svid', 'x', 'y', 'z', 'clockerror'])
+    output = pd.DataFrame(
+        results, columns=['epoch', 'date', 'time', 'svid', 'x', 'y', 'z', 'clockerror'])
     return output
-

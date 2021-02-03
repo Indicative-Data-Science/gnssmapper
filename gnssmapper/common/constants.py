@@ -4,7 +4,23 @@ Module containing constants and definitions used in gnss processing.
 Constellation specific information stored as dictionaries.
 keys [G,R,C,E] refer to gps,glonasss, beidou, and galileo constellations """
 
-from pandas import as_datetime, DataFrame
+from pandas import to_datetime, DataFrame
+
+""" GNSS logger"""
+
+# minimum version of gnsslogger
+minimum_version = "1.4.0.0"
+
+# IGS constellation identifiers
+constellation_numbering = {1: "G", 3: "R", 5: "C", 6: "E"}
+
+# navigation signal states indicating no measurement ambiguity
+required_states = {
+    'G': [1, 8],
+    'R': [1, 8, 128],
+    'C': [1, 8],
+    'E': [1, 8, 2048],
+}
 
 
 # number of nanonseconds in a gnss period
@@ -16,7 +32,7 @@ nanos_in_period = {
 }
 
 # offset of gnss epoch from gps
-epoch_offset_nanos = {
+constellation_epoch_offset = {
     'G': 0,
     'R': 86400 * 1e9,
     'C': 14 * 1e9,
@@ -24,7 +40,7 @@ epoch_offset_nanos = {
 }
 
 # starting epoch for gps
-gps_epoch = as_datetime('1980-01-06', format="%Y-%m-%d")
+gps_epoch = to_datetime('1980-01-06', format="%Y-%m-%d")
 
 # lightspeed in m/s
 lightspeed = 299792458
@@ -37,7 +53,7 @@ def leap_seconds(time) -> int:
     ls = [17, 18]
 
     ls_ends = ls_dates[1:]+'2100-01-01'
-    ls_daterange = [range(as_datetime(s, format="%Y-%m-%d"), as_datetime(f,
+    ls_daterange = [range(to_datetime(s, format="%Y-%m-%d"), to_datetime(f,
                                                                          format="%Y-%m-%d")) for s, f in zip(ls_dates, ls_ends)]
     ls_dic = dict(zip(ls_daterange, ls))
     return ls_dic[time]
