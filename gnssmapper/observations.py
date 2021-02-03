@@ -8,14 +8,10 @@ import geopandas as gpd
 import numpy as np
 import gpstime
 import pygeos
+import satellitedata
 
 
 
-def check_constellations(svid: pd.Series, expected: set[str]) -> None:
-    unsupported = set(svid.str[0].unique()) - expected
-    if ~unsupported:
-        warnings.warn(f'Includes unsupported constellations: {unsupported}\n')
-    return None
 
 
 def observe(points: gpd.GeoDataFrame, constellations: set[str] = []) -> gpd.GeoDataFrame:

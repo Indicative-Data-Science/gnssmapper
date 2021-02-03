@@ -4,15 +4,15 @@ Module containing constants and definitions used in gnss processing.
 Constellation specific information stored as dictionaries.
 keys [G,R,C,E] refer to gps,glonasss, beidou, and galileo constellations """
 
-from pandas import to_datetime, DataFrame
+import pandas as pd
 
 """ GNSS logger"""
 
 # minimum version of gnsslogger
 minimum_version = "1.4.0.0"
 
-#supported constellations
-supported_constellations = set("G","R","C","E")
+# supported constellations
+supported_constellations = set("G", "R", "C", "E")
 
 # IGS constellation identifiers
 constellation_numbering = {1: "G", 3: "R", 5: "C", 6: "E"}
@@ -25,7 +25,8 @@ required_states = {
     'E': [1, 8, 2048],
 }
 
-epsg_gnss_logger='EPSG:4979'
+epsg_gnss_logger = 'EPSG:4979'
+
 
 """ GNSS constants """
 
@@ -54,6 +55,7 @@ nanos_in_day = 86400 * 1e9
 # starting epoch for gps
 gps_epoch = pd.to_datetime('1980-01-06', format="%Y-%m-%d")
 
+
 def leap_seconds(time) -> int:
     """gps leap seconds."""
     # add to lists as gps seconds announced
@@ -61,10 +63,13 @@ def leap_seconds(time) -> int:
     ls = [17, 18]
 
     ls_ends = ls_dates[1:]+'2100-01-01'
-    ls_daterange = [range(to_datetime(s, format="%Y-%m-%d"), to_datetime(f,
-                                                                         format="%Y-%m-%d")) for s, f in zip(ls_dates, ls_ends)]
+    ls_daterange = [range(
+                          pd.to_datetime(s, format="%Y-%m-%d"),
+                          pd.to_datetime(f, format="%Y-%m-%d")
+                          ) for s, f in zip(ls_dates, ls_ends)]
     ls_dic = dict(zip(ls_daterange, ls))
     return ls_dic[time]
+
 
 epsg_satellites = 'EPSG:4978'
 epsg_wgs84 = 'EPSG:4979'
