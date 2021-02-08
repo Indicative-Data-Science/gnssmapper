@@ -1,14 +1,14 @@
 """ 
-Contains the core of gnssmapper.
-A private module. All functions accessible from main namespace
+Contains methods for generating observations from ReceiverPoints.
 
 """
 
 import geopandas as gpd
 import numpy as np
-import gpstime
 import pygeos
-import satellitedata
+
+import gnssmapper.common as cm
+import gnssmapper.satellitedata as st
 
 
 
@@ -38,8 +38,9 @@ def observe(points: gpd.GeoDataFrame, constellations: set[str] = []) -> gpd.GeoD
         sv
         signal features
     """
-    check_valid_receiverpoints(points)
-    check_constellations(constellations, constants.supported_constellations)
+    #preliminaries
+    cm.check.receiverpoints(points)
+    cm.check.constellations(constellations, cm.constants.supported_constellations)
     measured_constellations = set(points['svid'].str[0].unique())
 
     if ~constellations:
@@ -49,37 +50,38 @@ def observe(points: gpd.GeoDataFrame, constellations: set[str] = []) -> gpd.GeoD
         else:
             constellations = measured_constellations
 
-    gps_time = gpstime.utc_to_gps(points['time'])
-    sd = SatelliteData()
     # Generate dataframe of all svids supported by receiver
+    gps_time = cm.time.utc_to_gps(points['time'])
+    sd = st.SatelliteData()
     svids = sd.name_satellites(gps_time).explode(
-    ).dropna().reset_index(name='gps_time')
+        ).dropna().reset_index(name='gps_time')
     svids = svids[svids['svid'].str[0].isin(constellations)]
 
     # locate the satellites
     sats = sd.locate_satellites(svids['svid'], svids['gps_time'])
 
     # revert to utc time
-    sats['time'] = gpstime.gps_to_utc(sats['gps_time'])
+    sats['time'] = cm.time.gps_to_utc(sats['gps_time'])
     sats = sats.set_index(['time', 'svid'])
 
     # convert points into geocentric WGS and merge
-    receiver_df = points.to_crs(
-        constants.epsg_satellites).set_index(['time', 'svid'])
-    receiver_df = receiver_df.assign(
+    receiver = points.to_crs(
+        cm.constants.epsg_satellites).set_index(['time', 'svid'])
+    receiver = receiver.assign(
         x=receiver.geometry.x, y=receiver.geometry.y, z=receiver.geometry.z)
-    observations = receiver_df.merge(sats)
+    observations = receiver.merge(sats)
     r = observations.loc[:, ["x", "y", "z"]].to_numpy().tolist()
     s = observations.loc[:, ["sv_x", "sv_y", "sv_z"]].to_numpy().tolist()
     rays = rays(r, s)
 
     obs.drop(columns=['x', 'y', 'z', 'sv_x', 'sv_y', 'sv_z', 'geometry'])
-    obs = gpd.GeoDataFrame(obs, crs=constants.epsg_satellites, geometry=rays)
-
+    obs = gpd.GeoDataFrame(obs, crs=cm.constants.epsg_satellites, geometry=rays)
+    cm.check.observations(obs)
+    
     # filter observations
-    obs = filter_elevation(obs, constants.minimum_elevation,
-                           constants.maximum_elevation)
-    check_valid_observations(obs)
+    obs = filter_elevation(obs, cm.constants.minimum_elevation,
+                           cm.constants.maximum_elevation)
+    
     return obs
 
 
@@ -88,8 +90,9 @@ def rays(receivers: list, sats: list) -> gpd.LineString:
 
     The linestring is truncated towards the satellite. This is to avoid projected crs problems."""
     coords = [[tuple(r), tuple(s)] for r, s in zip(receivers, sats)]
-    rays = pygeos.creation.linestrings(coords)
-    return pygeos.linear.line_interpolate_point(rays, constants.ray_length)
+    lines = pygeos.creation.linestrings(coords)
+    short = pygeos.linear.line_interpolate_point(lines, cm.constants.ray_length)
+    return short
 
 
 def filter_elevation(observations: gpd.GeoDataFrame, lb: float, ub: float) -> gpd.GeoDataFrame:
@@ -120,8 +123,8 @@ def filter_elevation(observations: gpd.GeoDataFrame, lb: float, ub: float) -> gp
 def elevation(lines: gpd.GeoSeries) -> np.array:
     """ Returns elevation with respect to the wgs84 ellipsoid plane centred at the start of line. """
     check_valid_rays(lines)
-    ecef = lines.to_crs(constants.epsg_wgs84_cart)
-    lla = lines.to_crs(constants.epsg_wgs84)
+    ecef = lines.to_crs(cm.constants.epsg_wgs84_cart)
+    lla = lines.to_crs(cm.constants.epsg_wgs84)
 
     # need to extract and check unit
     delta = pygeos.get_coordinates(ecef, include_z=True)

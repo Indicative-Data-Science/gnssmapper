@@ -1,4 +1,11 @@
+import warnings
+
+import geopandas as gpd
 import numpy as np
+import pygeos
+
+
+
 import pandas as pd
 import shapely.geometry
 import math
@@ -15,6 +22,36 @@ a set of geometric methods that work in 3D and can interface with receiver and o
 a Map class for use throughout the simulator.
 
 """
+
+pd.api.extensions.register_dataframe_accessor("3D")
+class Accessor3D:
+    def __init__(self, gpd_obj):
+        self._validate(gpd_obj)
+        self._obj = gpd_obj
+    
+    @staticmethod
+    def _validate(obj):
+        if obj.__class__.__name__ != "GeoDataFrame":
+            raise ValueError("Must be a GeoPandas GeoDataFrame")
+        if "height" not in obj.columns:
+            raise AttributeError("Must have 'height'.")
+    
+    def to_crs(**kwargs):
+        """Transforms crs of geometry and height columns."""
+
+        pass
+ 
+
+
+def drop_z(map_: gpd.GeoDataFrame):
+    """Drops z attribute"""
+    if pygeos.has_z(map_.geometry).any():
+        warnings.warn("Geometry contains Z co-ordinates. Removed from Map3D (height attribute)")
+    map_.geometry = pygeos.apply(map_.geometry, lambda x: x, include_z=False)
+    return map_     
+
+
+
 
 
 class Map:

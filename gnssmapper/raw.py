@@ -2,12 +2,16 @@
 Module contains methods for processing raw GNSS data eg from gnss logger.
 """
 
+import warnings
+from typing import Tuple
+
 import pandas as pd
 import numpy as np
 import geopandas as gpd
-from . import common
-import warnings
-from typing import Tuple
+
+import gnssmapper.common.constants as con
+import gnssmapper.common.time as tm
+import gnssmapper.common.check as check
 
 
 def read_gnsslogger(filepath: str) -> gpd.GeoDataFrame:
@@ -30,9 +34,11 @@ def read_gnsslogger(filepath: str) -> gpd.GeoDataFrame:
     """
     gnss_raw, gnss_fix = read_csv_(filepath)
     gnss_obs = process_raw(gnss_raw)
-    gnss_obs = join_receiver_position(
+    points = join_receiver_position(
         gnss_obs, gnss_fix)
-    return gnss_obs
+
+    check.receiverpoints(points)
+    return points
 
 
 def read_csv_(filepath: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -79,10 +85,10 @@ def read_csv_(filepath: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
         warnings.warn(
             'Platform not found in log file. Expected "Platform: N".')
 
-    if not _compare_version(version, constants.minimum_version):
+    if not _compare_version(version, con.minimum_version):
         raise ValueError(
             f'''Version {version} found in log file. Gnssmapper supports
-            gnsslogger v{constants.minimum_version} onwards''')
+            gnsslogger v{con.minimum_version} onwards''')
 
     with open(filepath, 'r') as f:
         raw = (line.split(",", maxsplit=1)[1].replace(
@@ -128,7 +134,7 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
     """
     # reformat svid to standard (IGS) format
     constellation = gnss_raw['Constellation'].map(
-        constants.constellation_numbering)
+        con.constellation_numbering)
     svid_string = gnss_raw['Svid'].astype("string").pad(2, fillchar='0')
     svid = constellation.str.cat(svid_string)
 
@@ -145,7 +151,7 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
                      0)
           + np.vectorize(period_start_time)(
               rx, gnss_raw['state'], constellation)
-          + constellation.map(constants.constellation_epoch_offset))
+          + constellation.map(con.constellation_epoch_offset))
 
     # This will fail if the rx and tx are in seperate weeks
     # add code to remove a week if failed
@@ -153,37 +159,37 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
         warnings.warn(
             "rx less than tx, corrected assuming due to different gps weeks")
         tx -= np.where(rx < tx,
-                       constellation.map(constants.nanos_in_period), 0)
+                       constellation.map(con.nanos_in_period), 0)
 
     # check we have no nonsense psuedoranges
     assert 0 < rx - tx < 1e9, 'Calculated pr time outside 0 to 1 seconds'
 
     # Pseudorange
-    pr = (rx-tx) * 1e-9 * constants.lightspeed
+    pr = (rx-tx) * 1e-9 * con.lightspeed
 
     # utc time
-    time = time.gps_to_utc(rx)
+    time = tm.gps_to_utc(rx)
     time_ms = time.astype(int) // 1e6
 
     return pd.concat([gnss_raw, svid, rx, tx, time, time_ms, pr])
 
 
-def galileo_ambiguity(x: int) -> int:
+def galileo_ambiguity(x: np.array) -> np.array:
     """ Correcting transmission time for Galileo measurements.
 
     Measurements may collapse into measuring pilot stage.
     100ms period is assumed to avoid ambiguity.
     """
-    return (constants.nanos_in_period['E']
-            * (x // constants.nanos_in_period['E']))
+    return (con.nanos_in_period['E']
+            * (x // con.nanos_in_period['E']))
 
 
 def period_start_time(rx: int, state: int, constellation: str) -> int:
     """Calculates the start time for the gnss period"""
-    tx_valid = all(state & n for n in constants.required_states[constellation])
+    tx_valid = all(state & n for n in con.required_states[constellation])
     if tx_valid:
-        return (constants.nanos_in_period[constellation] *
-                (rx // constants.nanos_in_period[constellation]))
+        return (con.nanos_in_period[constellation] *
+                (rx // con.nanos_in_period[constellation]))
     else:
         return np.nan
 
@@ -192,7 +198,7 @@ def join_receiver_position(
         gnss_obs: pd.DataFrame,
         gnss_fix: pd.DataFrame) -> gpd.GeoDataFrame:
     """  Add receiver positions to Raw data.
-  
+
     Joined by utc time in milliseconds.
     """
     df = gnss_obs.join(gnss_fix.set_index("(utc)TimeInMS"),
@@ -206,5 +212,5 @@ def join_receiver_position(
         df,
         geometry=gpd.points_from_xy(df["Latitude"], df["Longitude"],
                                     df["Altitude"]),
-        crs=constants.epsg_gnss_logger)
+        crs=con.epsg_gnss_logger)
     return gdf
