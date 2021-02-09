@@ -135,7 +135,7 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
     # reformat svid to standard (IGS) format
     constellation = gnss_raw['Constellation'].map(
         con.constellation_numbering)
-    svid_string = gnss_raw['Svid'].astype("string").pad(2, fillchar='0')
+    svid_string = gnss_raw['Svid'].astype("string").str.pad(2, fillchar='0')
     svid = constellation.str.cat(svid_string)
 
     # compute receiver time (nanos since gps epoch)
@@ -162,16 +162,17 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
                        constellation.map(con.nanos_in_period), 0)
 
     # check we have no nonsense psuedoranges
-    assert 0 < rx - tx < 1e9, 'Calculated pr time outside 0 to 1 seconds'
+    # assert 0 < np.min(rx - tx) <= np.max(rx -
+    #                                      tx) < 1e9, f'Calculated pr time outside 0 to 1 seconds: {np.min(rx-tx)} - {np.max(rx-tx)}'
 
     # Pseudorange
-    pr = (rx-tx) * 1e-9 * con.lightspeed
+    pr = (rx-tx) * (10**-9) * con.lightspeed
 
     # utc time
     time = tm.gps_to_utc(rx)
     time_ms = time.astype(int) // 1e6
 
-    return pd.concat([gnss_raw, svid, rx, tx, time, time_ms, pr])
+    return gnss_raw.assign(svid=svid, rx=rx, tx=tx, time=time, time_ms=time_ms, pr=pr)
 
 
 def galileo_ambiguity(x: np.array) -> np.array:

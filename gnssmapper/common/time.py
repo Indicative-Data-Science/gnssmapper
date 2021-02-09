@@ -54,4 +54,4 @@ def gpsweek_to_gps(
         time: pd.Series) -> pd.Series:
     """Turn (gpsweek,gpsday, nanos) format into nanos from gps epoch"""
 
-    return (week * 7 + day) * constants.nanos_in_day + time
+    return pd.Series((week * 7 + day) * constants.nanos_in_day + time,name="time")
