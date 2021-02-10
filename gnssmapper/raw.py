@@ -4,6 +4,8 @@ Module contains methods for processing raw GNSS data eg from gnss logger.
 
 import warnings
 from typing import Tuple
+from typing import Union
+from io import StringIO
 
 import pandas as pd
 import numpy as np
@@ -71,19 +73,19 @@ def read_csv_(filepath: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
         for line in f:
             if "version" in line.lower():
                 start = line.lower().find("version")+9
-                end = start+8
-                version = line[start:].split(" ", maxsplit=1)[0]
+                string = line[start:].split(" ", maxsplit=1)[0]
+                version = ".".join(filter(str.isdigit,string))
+                
             if "platform" in line.lower():
                 start = line.lower().find("platform")+10
-                end = start+2
-                platform = line[start:end]
+                platform = line[start:].split(" ", maxsplit=1)[0]
 
             if version != "" and platform != "":
                 break
 
-    if platform != "N":
+    if not _compare_platform(platform, con.minimum_platform):
         warnings.warn(
-            'Platform not found in log file. Expected "Platform: N".')
+            f'Platform {platform} found in log file. Expected "Platform: N onwards".')
 
     if not _compare_version(version, con.minimum_version):
         raise ValueError(
@@ -93,12 +95,16 @@ def read_csv_(filepath: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     with open(filepath, 'r') as f:
         raw = (line.split(",", maxsplit=1)[1].replace(
             " ", "") for line in f if "raw" in line.lower())
-        gnss_raw = pd.read_csv("\n".join(raw))
+        gnss_raw = pd.read_csv(
+            StringIO("\n".join(raw))
+            )
 
     with open(filepath, 'r') as f:
         fix = (line.split(",", maxsplit=1)[1].replace(
             " ", "") for line in f if "fix" in line.lower())
-        gnss_fix = pd.read_csv("\n".join(fix))
+        gnss_fix = pd.read_csv(
+            StringIO("\n".join(fix))
+            )
 
     return (gnss_raw, gnss_fix)
 
@@ -118,6 +124,17 @@ def _compare_version(actual: str, expected: str) -> bool:
 
     return True
 
+def _compare_platform(actual: Union[int,str], expected: int) -> bool:
+    """Tests whether the OS version meets dependencies."""
+    if str(actual).isdigit():
+        return int(actual) >= int(expected)
+    
+    if actual in con.platform:
+        return con.platform[actual] >= int(expected)
+    
+    else:
+        warnings.warn(f'Platform {actual} found in log file, does not correspond to known platform number.')
+        return False
 
 def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
     """Generates signal features from raw measurements.
@@ -133,7 +150,7 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
         gnss_raw plus svid, rx, tx, time, pr
     """
     # reformat svid to standard (IGS) format
-    constellation = gnss_raw['Constellation'].map(
+    constellation = gnss_raw['ConstellationType'].map(
         con.constellation_numbering)
     svid_string = gnss_raw['Svid'].astype("string").str.pad(2, fillchar='0')
     svid = constellation.str.cat(svid_string)
@@ -150,7 +167,7 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
                      galileo_ambiguity(gnss_raw['ReceivedSvTimeNanos']),
                      0)
           + np.vectorize(period_start_time)(
-              rx, gnss_raw['state'], constellation)
+              rx, gnss_raw['State'], constellation)
           + constellation.map(con.constellation_epoch_offset))
 
     # This will fail if the rx and tx are in seperate weeks

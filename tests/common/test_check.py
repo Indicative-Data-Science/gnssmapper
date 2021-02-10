@@ -45,5 +45,8 @@ class TestCheck(unittest.TestCase):
         valid_receiverpoints = gpd.GeoDataFrame(self.d, geometry = self.points)
         self.assertIsNone(receiverpoints(valid_receiverpoints))
 
+    def test_nanos(self) -> None:
+        d=pd.Series([1.0])
+        self.assertWarns(UserWarning,nanos,d)
 
 

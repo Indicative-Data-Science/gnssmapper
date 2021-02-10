@@ -11,6 +11,8 @@ import bisect
 
 # minimum version of gnsslogger
 minimum_version = "1.4.0.0"
+minimum_platform = 7
+platform = {"N": 7, "O": 8, "P": 9}
 
 # supported constellations
 supported_constellations = set(["G", "R", "C", "E"])
@@ -61,13 +63,12 @@ def leap_seconds(time) -> int:
     """gps leap seconds."""
     # add to lists as gps seconds announced
     ls_dates_str = ['2015-07-01', '2017-01-01']
-    ls_dates=pd.to_datetime(ls_dates_str,format="%Y-%m-%d")
+    ls_dates = pd.to_datetime(ls_dates_str, format="%Y-%m-%d")
     ls = [None, 17, 18]
     idx = bisect.bisect_right(ls_dates, time)
-    if idx==0:
+    if idx == 0:
         raise ValueError(f"GPS leap seconds only defined post {ls_dates[0]}")
     return ls[idx]
-
 
 
 epsg_satellites = 'EPSG:4978'

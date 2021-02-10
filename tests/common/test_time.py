@@ -14,15 +14,14 @@ class TestTime(unittest.TestCase):
         pt.assert_series_equal(utc_to_gps(ts),ns,check_exact=True)
   
     def test_gps_doy(self) -> None:
-        ns = pd.Series([100,200])
-        ts = pd.DataFrame({'date': ['1980006', '1980006'], 'time': [100, 200]})
-        print(gps_to_doy(ns))
+        ns = pd.Series([1,2])
+        ts = pd.DataFrame({'date': ['1980006', '1980006'], 'time': [1, 2]})
         pt.assert_frame_equal(gps_to_doy(ns),ts,check_exact=True)
         pt.assert_series_equal(doy_to_gps(ts.date,ts.time),ns,check_exact=True)
     
     def test_gps_gpsweek(self) -> None:
-        ns = pd.Series([604800 * 10**9])
-        ts = pd.DataFrame({'week':[1],'day':[0],'time':[0]})
+        ns = pd.Series([604800*2000 * 10**9 + 1 * 10 ** 7])
+        ts = pd.DataFrame({'week':[2000],'day':[0],'time':[1 * 10 ** 7]})
         pt.assert_frame_equal(gps_to_gpsweek(ns),ts,check_exact=True)
         pt.assert_series_equal(gpsweek_to_gps(ts.week,ts.day,ts.time),ns,check_exact=True,check_names=False)
 

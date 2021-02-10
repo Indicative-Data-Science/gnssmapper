@@ -2,11 +2,14 @@
 import pandas as pd
 
 from . import constants
+from . import check
 
 
 def gps_to_utc(time: pd.Series) -> pd.Series:
     """Converts nanos since gps epoch into utc datetime format."""
-    ts_gps = pd.to_datetime(time, unit='ns', origin=constants.gps_epoch)
+    check.nanos(time)
+    time_int=pd.to_numeric(time,downcast='integer')
+    ts_gps = pd.to_datetime(time_int, unit='ns', origin=constants.gps_epoch)
     # iterates leapsecond calculation to avoid problems at rollover.
     ts_estimate = ts_gps - pd.to_timedelta(ts_gps.map(constants.leap_seconds),unit='s')
     return ts_gps - pd.to_timedelta(ts_estimate.map(constants.leap_seconds),unit='s')
@@ -22,7 +25,9 @@ def utc_to_gps(time: pd.Series) -> pd.Series:
 
 def gps_to_doy(time: pd.Series) -> pd.DataFrame:
     """Turn nanos from gps epoch into a (YYYYDOY, nanos) format."""
-    ts = pd.to_datetime(time, unit='ns', origin=constants.gps_epoch)
+    check.nanos(time)
+    time_int=pd.to_numeric(time,downcast='integer')
+    ts = pd.to_datetime(time_int, unit='ns', origin=constants.gps_epoch)
 
     year = ts.dt.year.astype("str")
     day = ts.dt.dayofyear.astype("str")
@@ -35,15 +40,19 @@ def gps_to_doy(time: pd.Series) -> pd.DataFrame:
 
 def doy_to_gps(date: pd.Series, time: pd.Series) -> pd.Series:
     """Turn (YYYYDOY, nanos) format into nanos from gps epoch"""
+    check.nanos(time)
+    time_int=pd.to_numeric(time,downcast='integer')
     dt = pd.to_datetime(date, format='%Y%j')
-    delta = dt + pd.to_timedelta(time,unit='ns') - constants.gps_epoch
+    delta = dt + pd.to_timedelta(time_int,unit='ns') - constants.gps_epoch
     return pd.Series(delta.values,dtype='int64')
 
 
 def gps_to_gpsweek(time: pd.Series) -> pd.DataFrame:
     """Turn nanos from gps epoch into a (gpsweek,gpsday, ns) format."""
-    days = time // constants.nanos_in_day
-    gpsweek = days // 7
+    check.nanos(time)
+    time_int=pd.to_numeric(time,downcast='integer')
+    days = time_int.floordiv(constants.nanos_in_day)
+    gpsweek = days.floordiv(7)
     gpsdays = days - 7 * gpsweek
     ns = time - days * constants.nanos_in_day
     return pd.DataFrame({"week": gpsweek, "day": gpsdays, "time": ns})
@@ -53,5 +62,6 @@ def gpsweek_to_gps(
         week: pd.Series, day: pd.Series,
         time: pd.Series) -> pd.Series:
     """Turn (gpsweek,gpsday, nanos) format into nanos from gps epoch"""
-
-    return pd.Series((week * 7 + day) * constants.nanos_in_day + time,name="time")
+    check.nanos(time)
+    time_int=pd.to_numeric(time,downcast='integer')
+    return pd.Series((week * 7 + day) * constants.nanos_in_day + time_int,name="time")
