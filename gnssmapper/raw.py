@@ -35,6 +35,7 @@ def read_gnsslogger(filepath: str) -> gpd.GeoDataFrame:
 
     """
     gnss_raw, gnss_fix = read_csv_(filepath)
+
     gnss_obs = process_raw(gnss_raw)
     points = join_receiver_position(
         gnss_obs, gnss_fix)
@@ -97,14 +98,14 @@ def read_csv_(filepath: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
             " ", "") for line in f if "raw" in line.lower())
         gnss_raw = pd.read_csv(
             StringIO("\n".join(raw))
-            )
+            ).convert_dtypes()
 
     with open(filepath, 'r') as f:
         fix = (line.split(",", maxsplit=1)[1].replace(
             " ", "") for line in f if "fix" in line.lower())
         gnss_fix = pd.read_csv(
             StringIO("\n".join(fix))
-            )
+            ).convert_dtypes()
 
     return (gnss_raw, gnss_fix)
 
@@ -151,8 +152,8 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
     """
     # reformat svid to standard (IGS) format
     constellation = gnss_raw['ConstellationType'].map(
-        con.constellation_numbering)
-    svid_string = gnss_raw['Svid'].astype("string").str.pad(2, fillchar='0')
+        con.constellation_numbering).convert_dtypes()
+    svid_string = gnss_raw['Svid'].astype("string").str.pad(2, fillchar='0').convert_dtypes()
     svid = constellation.str.cat(svid_string)
 
     # compute receiver time (nanos since gps epoch)
@@ -163,31 +164,30 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
     # ReceivedSvTimeNanos (time since start of gnss period)
     # + gps time of start of gnss period
     tx = (gnss_raw['ReceivedSvTimeNanos']
-          - np.where(constellation == 'E',
-                     galileo_ambiguity(gnss_raw['ReceivedSvTimeNanos']),
-                     0)
-          + np.vectorize(period_start_time)(
+         - galileo_ambiguity(gnss_raw['ReceivedSvTimeNanos']).where(constellation == 'E', 0)
+          + period_start_time(
               rx, gnss_raw['State'], constellation)
-          + constellation.map(con.constellation_epoch_offset))
+          + constellation.map(con.constellation_epoch_offset).convert_dtypes())
 
     # This will fail if the rx and tx are in seperate weeks
     # add code to remove a week if failed
-    if np.any(rx < tx):
+    check = rx < tx
+    if check.any():
         warnings.warn(
             "rx less than tx, corrected assuming due to different gps weeks")
-        tx -= np.where(rx < tx,
-                       constellation.map(con.nanos_in_period), 0)
+        correction = constellation.map(con.nanos_in_period).convert_dtypes()
+        tx = tx.where(~check,tx-correction)
 
     # check we have no nonsense psuedoranges
-    # assert 0 < np.min(rx - tx) <= np.max(rx -
-    #                                      tx) < 1e9, f'Calculated pr time outside 0 to 1 seconds: {np.min(rx-tx)} - {np.max(rx-tx)}'
+    assert 0 < np.min(rx - tx) <= np.max(rx -
+                                         tx) < 1e9, f'Calculated pr time outside 0 to 1 seconds: {np.min(rx-tx)} - {np.max(rx-tx)}'
 
     # Pseudorange
     pr = (rx-tx) * (10**-9) * con.lightspeed
 
     # utc time
     time = tm.gps_to_utc(rx)
-    time_ms = time.astype(int) // 1e6
+    time_ms = tm.utc_to_int(time) // 10**6
 
     return gnss_raw.assign(svid=svid, rx=rx, tx=tx, time=time, time_ms=time_ms, pr=pr)
 
@@ -202,14 +202,16 @@ def galileo_ambiguity(x: np.array) -> np.array:
             * (x // con.nanos_in_period['E']))
 
 
-def period_start_time(rx: int, state: int, constellation: str) -> int:
+def period_start_time(rx: pd.Series, state: pd.Series, constellation: pd.Series) -> pd.Series:
     """Calculates the start time for the gnss period"""
-    tx_valid = all(state & n for n in con.required_states[constellation])
-    if tx_valid:
-        return (con.nanos_in_period[constellation] *
-                (rx // con.nanos_in_period[constellation]))
-    else:
-        return np.nan
+    required_states = constellation.map(con.required_states)
+    nanos_in_period = constellation.map(con.nanos_in_period).convert_dtypes()
+    missing = required_states.isna() | state.isna()
+
+    tx_valid = [not(m) and all(s & n for n in r) for s,r,m in zip(state,required_states,missing)]
+    start = nanos_in_period * (rx // nanos_in_period)
+    return start.where(tx_valid,pd.NA)
+ 
 
 
 def join_receiver_position(
@@ -219,12 +221,11 @@ def join_receiver_position(
 
     Joined by utc time in milliseconds.
     """
-    df = gnss_obs.join(gnss_fix.set_index("(utc)TimeInMS"),
-                       on="time_ms", how="inner")
+    df = gnss_obs.join(gnss_fix.set_index("(UTC)TimeInMs"),
+                       on="time_ms", how="inner",lsuffix="obs",rsuffix="fix")
     if len(df) != len(gnss_obs):
         warnings.warn(
-            f'''{len(gnss_obs)-len(df)}
-             observations discarded without matching fix.'''
+            f'{len(gnss_obs)-len(df)} observations discarded without matching fix.'
         )
     gdf = gpd.GeoDataFrame(
         df,

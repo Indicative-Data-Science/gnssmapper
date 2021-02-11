@@ -5,7 +5,9 @@ Constellation specific information stored as dictionaries.
 keys [G,R,C,E] refer to gps,glonasss, beidou, and galileo constellations """
 
 import pandas as pd
+import numpy as np
 import bisect
+import warnings
 
 """ GNSS logger"""
 
@@ -64,11 +66,15 @@ def leap_seconds(time) -> int:
     # add to lists as gps seconds announced
     ls_dates_str = ['2015-07-01', '2017-01-01']
     ls_dates = pd.to_datetime(ls_dates_str, format="%Y-%m-%d")
-    ls = [None, 17, 18]
-    idx = bisect.bisect_right(ls_dates, time)
-    if idx == 0:
-        raise ValueError(f"GPS leap seconds only defined post {ls_dates[0]}")
-    return ls[idx]
+    
+    if pd.isnull(time):
+        return np.nan
+    else:
+        ls = [np.nan, 17, 18]
+        idx = bisect.bisect_right(ls_dates, time)
+        if idx == 0:
+            warnings.warn(f"GPS leap seconds only defined post {ls_dates[0]}")
+        return ls[idx]
 
 
 epsg_satellites = 'EPSG:4978'

@@ -100,6 +100,6 @@ def constellations(svid: pd.Series, expected: set[str]) -> None:
 
 def nanos(time: pd.Series) -> None:
     """ Warns if floats being used in for gps time"""
-    if time.dtype == "float":
+    if pd.api.types.is_float_dtype(time):
         warnings.warn("Potential rounding errors due to GPS time in nanoseconds input as float")
     return None
