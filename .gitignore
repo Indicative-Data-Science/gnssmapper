@@ -1,6 +1,7 @@
 __pycache__/
-gnssmapper/data/sp3/
-gnssmapper/data/orbits/
+gnssmapper/data/sp3/*
+gnssmapper/data/orbits/*
+!**/__init__.py
 experiment/receiver_points/
 experiment/algo_intersections/
 experiment/observations/

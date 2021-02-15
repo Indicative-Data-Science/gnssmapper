@@ -62,11 +62,12 @@ class SatelliteData:
             a list of svids visible at each point in time, indexed by time
         """
         # assuming list of svids is static over a day
-        days, _ = tm.gps_to_doy(time)['date']
+        days = tm.gps_to_doy(time)['date']
 
         self.update_orbits(days)
-
-        return pd.Series(days.map(lambda x: [self.orbits[x].keys()]), name='svid', index=time)
+        svids = pd.Series(days.map(lambda x: list(self.orbits[x].keys())), name='svid')
+        svids.index=time
+        return svids
 
     def locate_satellites(self, svid: pd.Series, time: pd.Series) -> pd.DataFrame:
         """Returns satellite location in geocentric WGS84 coordinate.
@@ -262,7 +263,7 @@ def get_SP3_file(date: str, orbit_type='final') -> str:
     
 
     filename = _sp3_filename[orbit_type](date)
-    
+    filename
     if not importlib.resources.is_resource(data.sp3, filename):
         url = _sp3_datasite + _sp3_filepath(date) + filename
         local_path = data.sp3.__path__[0]+'/'+filename

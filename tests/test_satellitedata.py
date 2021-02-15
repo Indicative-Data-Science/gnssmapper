@@ -36,11 +36,13 @@ class TestHelperFunctions(unittest.TestCase):
         npt.assert_almost_equal(test1[1]['z'],[0,0,7,0,0,0,0,0])
    
 class TestSP3Functions(unittest.TestCase):
-    def test_get_SP3_file(self) -> None:
-        sp3 = get_SP3_file('2020042')
+    def test_SP3_filename(self) -> None:
         esm_path = 'ESA0MGNFIN_2020' + '042' + '0000_01D_05M_ORB.SP3.gz'
         local = data.sp3.__path__[0] +'/'+ esm_path
         self.assertTrue(os.path.exists(local))
+
+    def test_get_SP3_file(self) -> None:
+        sp3 = get_SP3_file('2020042')
         self.assertIsInstance(sp3, str)
 
     def test_get_SP3_dataframe(self) -> None:
@@ -53,7 +55,6 @@ class TestSP3Functions(unittest.TestCase):
     def test_setup(self):
         empty=SatelliteData()
         self.assertEqual(empty.orbits,{})
-
 
 
 class TestSVIDLocation(unittest.TestCase):
@@ -101,9 +102,15 @@ class TestSVIDLocation(unittest.TestCase):
         entry=self.truncated_orbits.loc[(self.truncated_orbits['svid']=="G18") & (self.truncated_orbits['time']==doy['time'][0]),:].reset_index(drop=True)
         npt.assert_almost_equal(np.array(predict.loc[:,'sv_x':'sv_z']).flatten(),np.asarray([entry.x,entry.y,entry.z]).flatten(),decimal=0)
 
-if __name__ == '__main__':
-    unittest.main()
-
+class TestNameSatellites(unittest.TestCase):
+    def test_naming(self) -> None:
+        time = tm.utc_to_gps(pd.Series([np.datetime64('2020-02-11T00:59:42', 'ns')]))
+        data = SatelliteData()
+        out = data.name_satellites(time)
+        self.assertSetEqual(
+            set(out.iat[0]),
+            set(list(data.orbits['2020042'].keys()))
+            )
 
 
 
