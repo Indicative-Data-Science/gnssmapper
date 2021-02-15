@@ -134,10 +134,10 @@ class TestProcessRaw(unittest.TestCase):
     def test_tx_prior_week(self) -> None:
         # transmitted at 0.01 second before start of week
         tx_ = pd.DataFrame({'week': [1999], 'day': [6], 'time': [
-            cn.nanos_in_day*7 - 1 * 10 ** 7]})
+            cn.nanos_in_day - 1 * 10 ** 7]})
         tx_gps = tm.gpsweek_to_gps(tx_.week, tx_.day, tx_.time).convert_dtypes()
         input_ = self.input
-        input_.loc[:,'ReceivedSvTimeNanos'] = tm.gpsweek_to_gps(0,tx_.day,tx_.time)
+        input_.loc[:,'ReceivedSvTimeNanos'] = tm.gpsweek_to_gps(0,0,tx_.day*cn.nanos_in_day+tx_.time)
         output = raw.process_raw(input_)
         pt.assert_extension_array_equal(
             output.tx.array,
@@ -162,7 +162,7 @@ class TestNA(unittest.TestCase):
     def test_joining(self) -> None:
         raw_var, gnss_fix = raw.read_csv_(self.filepath)
         gnss_obs = raw.process_raw(raw_var)
-        points = raw.join_receiver_position(
+        self.assertRaises(ValueError,raw.join_receiver_position,
             gnss_obs, gnss_fix)
 
 class TestJoinReceiverPosition(unittest.TestCase):

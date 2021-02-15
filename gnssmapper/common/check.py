@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pygeos
 
-from . import constants
+from gnssmapper.common.constants import supported_constellations
 
 def rays(rays: gpd.GeoSeries) -> None:
     # warnings
@@ -36,7 +36,7 @@ def receiverpoints(points: gpd.GeoDataFrame) -> None:
     crs(points.geometry)
     if 'svid' in points.columns:
         constellations(
-            points['svid'], constants.supported_constellations)
+            points['svid'], supported_constellations)
     # errors
     tests = {
         'Missing geometries': points.geometry.is_empty.any(),
@@ -54,7 +54,7 @@ def receiverpoints(points: gpd.GeoDataFrame) -> None:
 
 def observations(obs: gpd.GeoDataFrame) -> None:
     if 'svid' in obs.columns:
-        constellations(obs['svid'], constants.supported_constellations)
+        constellations(obs['svid'], supported_constellations)
     rays(obs.geometry)
     # errors
     tests = {
@@ -96,10 +96,4 @@ def constellations(svid: pd.Series, expected: set[str]) -> None:
     unsupported = set(svid.str[0].unique()) - expected
     if unsupported:
         warnings.warn(f'Includes unsupported constellations: {unsupported}')
-    return None
-
-def nanos(time: pd.Series) -> None:
-    """ Warns if floats being used in for gps time"""
-    if pd.api.types.is_float_dtype(time):
-        warnings.warn("Potential rounding errors due to GPS time in nanoseconds input as float")
     return None

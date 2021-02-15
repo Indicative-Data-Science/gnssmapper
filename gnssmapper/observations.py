@@ -10,10 +10,6 @@ import pygeos
 import gnssmapper.common as cm
 import gnssmapper.satellitedata as st
 
-
-
-
-
 def observe(points: gpd.GeoDataFrame, constellations: set[str] = []) -> gpd.GeoDataFrame:
     """Generates a set of observations from a receiverpoints dataframe.
 

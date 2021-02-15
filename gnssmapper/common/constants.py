@@ -4,10 +4,11 @@ Module containing constants and definitions used in gnss processing.
 Constellation specific information stored as dictionaries.
 keys [G,R,C,E] refer to gps,glonasss, beidou, and galileo constellations """
 
-import pandas as pd
-import numpy as np
 import bisect
 import warnings
+
+import pandas as pd
+import numpy as np
 
 """ GNSS logger"""
 
@@ -54,9 +55,9 @@ constellation_epoch_offset = {
 # lightspeed in m/s
 lightspeed = 299792458
 
+""" GPS and UTC conversion"""
 nanos_in_day = 86400 * 10**9
 
-""" GPS and UTC conversion"""
 # starting epoch for gps
 gps_epoch = pd.to_datetime('1980-01-06', format="%Y-%m-%d")
 
@@ -83,3 +84,4 @@ epsg_wgs84_cart = 'EPSG:4978'
 ray_length = 1000
 minimum_elevation = 0
 maximum_elevation = 85
+

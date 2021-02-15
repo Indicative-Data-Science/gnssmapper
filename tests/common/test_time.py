@@ -4,6 +4,7 @@ import unittest
 import numpy as np
 import pandas as pd
 from gnssmapper.common.time import *
+from gnssmapper.common.time import _check_nanos
 from gnssmapper.common.constants import gps_epoch
 import pandas.testing as pt
 
@@ -47,8 +48,11 @@ class TestMissing(unittest.TestCase):
         pt.assert_extension_array_equal(gpsweek_to_gps(ts.week,ts.day,ts.time).array,ns.array,check_exact=True)
 
 
+class TestHelper(unittest.TestCase):
 
-
+    def test_nanos(self) -> None:
+        d=pd.Series([1.0])
+        self.assertWarns(UserWarning,_check_nanos,d)
 
 
 

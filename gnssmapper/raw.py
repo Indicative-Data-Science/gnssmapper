@@ -171,12 +171,12 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
 
     # This will fail if the rx and tx are in seperate weeks
     # add code to remove a week if failed
-    check = rx < tx
-    if check.any():
+    check = rx > tx
+    if not check.all():
         warnings.warn(
             "rx less than tx, corrected assuming due to different gps weeks")
         correction = constellation.map(con.nanos_in_period).convert_dtypes()
-        tx = tx.where(~check,tx-correction)
+        tx = tx.where(check,tx-correction)
 
     # check we have no nonsense psuedoranges
     assert 0 < np.min(rx - tx) <= np.max(rx -

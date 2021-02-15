@@ -1,5 +1,5 @@
 """ 
-This module contains methods for calculating satellite positions using IGS ephemeris data. It defines a class to avoid reloading the data each time the function is called.
+This module contains methods for calculating satellite positions using IGS ephemeris data_var. It defines a class to avoid reloading the data_var each time the function is called.
 
 """
 
@@ -13,6 +13,7 @@ import re
 import gzip
 import zlib
 import urllib.request
+import importlib.resources
 
 import pandas as pd
 import numpy as np
@@ -21,35 +22,34 @@ from numpy.polynomial import polynomial as P
 
 import gnssmapper.common.constants as con
 import gnssmapper.common.time as tm
+import gnssmapper.data as data
 
 
 class SatelliteData:
-    def __init__(self, orbits_filedir: str = "data/orbits/"):
-        self.orbits_filedir = orbits_filedir
+    def __init__(self):
         self.orbits = defaultdict(dict)
 
     @property
     def metadata(self) -> set:
-        filenames = [f for f in (os.listdir(
-            self.orbits_filedir)) if re.match("orbits_", f)]
+        filenames = [f for f in importlib.resources.contents(data.orbits) if re.match("orbits_", f)]
         days = [re.split(r'_|\.', f)[1] for f in filenames]
         return set(days)
 
     def load_orbit(self, day: str) -> dict:
         try:
-            with open(self.orbits_filedir+get_filename(day)) as json_file:
-                data = json.load(json_file)
-            return data
+            with importlib.resources.open_binary(data.orbits,get_filename(day)) as json_file:
+                data_var = json.load(json_file)
+            return data_var
 
         except IOError:
             return dict()
 
-    def save_orbit(self, day: str, data: dict) -> None:
-        with open(self.orbits_filedir+get_filename(day), 'w') as outfile:
-            json.dump(data, outfile, indent=4)
+    def save_orbit(self, day: str, data_var: dict) -> None:
+        with open(data.orbits.__path__[0]+'/'+get_filename(day), 'w') as outfile:
+            json.dump(data_var, outfile, indent=4)
 
     def name_satellites(self, time: pd.Series) -> pd.Series:
-        """Provides the svids for satellites tracked in IGS ephemeris data.
+        """Provides the svids for satellites tracked in IGS ephemeris data_var.
 
         Parameters
         ----------
@@ -86,12 +86,14 @@ class SatelliteData:
         """
 
         doy = tm.gps_to_doy(time)
-        days = doy['date'],
+        days = doy['date']
         nanos = doy['time']
         self.update_orbits(days)
         coords = pd.DataFrame([self._locate_sat(d, t, s)
                                for d, t, s in zip(days, nanos, svid)], columns=['sv_x', 'sv_y', 'sv_z'])
-        return coords.assign({svid.name: svid.values, time.name: time.values})
+        new_columns = {svid.name:svid.array,time.name:time.array}
+        print(new_columns)
+        return coords.assign(**new_columns)
 
     def _locate_sat(self, day: str, time: float, svid: str) -> list:
         """Returns satellite location in geocentric WGS84 coordinates.
@@ -153,19 +155,20 @@ class SatelliteData:
         days : pd.Series
             days in YYYYdoy string format 
         """
-        days = set(days.unique())
-        missing_days = days - self.metadata
+        days_ = set(days)
+        missing_days = days_ - self.metadata
 
         for day in missing_days:
             orbit_dic = defaultdict(dict)
             sp3 = get_SP3_file(day)
             df = get_SP3_dataframe(sp3)
+            print(f"creating {day} orbit")
             unsorted_orbit = create_orbit(df)
             for svid, dic in unsorted_orbit.items():
                 orbit_dic[svid] = OrderedDict(sorted(dic.items()))
             self.save_orbit(day, orbit_dic)
 
-        for day in days:
+        for day in days_:
             if day not in self.orbits:
                 self.orbits[day] = self.load_orbit(day)
 
@@ -173,7 +176,7 @@ class SatelliteData:
 def create_orbit(sp3_df: pd.DataFrame) -> dict:
     """Creates a dictionary of Lagrangian 7th order polynomial coefficents used for interpolation. 
 
-    Estimates centred at every 4th data point, including lower and upper time bounds of validity, scaling parameters and lagrangian coeffecients.
+    Estimates centred at every 4th data_var point, including lower and upper time bounds of validity, scaling parameters and lagrangian coeffecients.
 
     Parameters
     ----------
@@ -185,8 +188,8 @@ def create_orbit(sp3_df: pd.DataFrame) -> dict:
     dict
         {id:{midpoint of period: {dictionary of estimates}}}
     """
-    day = sp3_df['date'].str[:4].astype(int)
-    sp3_df['tm'] = sp3_df['time'] + (day-min(day)) * 24 * 3600 * 1e9
+    day = sp3_df['date'].str[4:].astype(int)
+    sp3_df['tm'] = sp3_df['time'].astype(int) + (day-min(day)) * 24 * 3600 * 10**9
     sp3_df = sp3_df.sort_values(['svid', 'tm'])
     polyXYZ = defaultdict(dict)
 
@@ -220,17 +223,17 @@ def poly_lagrange(i: int, alldata: pd.DataFrame) -> list[float, dict]:
     """
     if i < 3 or i > len(alldata)-5:
         raise ValueError('"outside fit interval"')
-    data = alldata.iloc[i-3:i+5, :].reset_index(drop=True)
-    lb, ub = data.iloc[0, 0], data.iloc[7, 0]
-    mid = data.iloc[3, :]
-    scale = data.iloc[7, :] - data.iloc[0, :]
-    scaled_data = (data - mid)/scale
+    data_var = alldata.iloc[i-3:i+5, :].reset_index(drop=True)
+    lb, ub = data_var.iloc[0, 0], data_var.iloc[7, 0]
+    mid = data_var.iloc[3, :]
+    scale = data_var.iloc[7, :] - data_var.iloc[0, :]
+    scaled_data = (data_var - mid)/scale
 
     def coefs(dim: str) -> list:
         # why turned round
         return np.asarray(lagrange(scaled_data["tm"], scaled_data[dim])).tolist()[::-1]
 
-    return [mid[0], {'lb': lb, 'ub': ub, 'mid': list(mid), 'scale': list(scale), 'x': coefs('x'), 'y': coefs('y'), 'z': coefs('z')}]
+    return [mid.tolist()[0], {'lb': lb.tolist(), 'ub': ub.tolist(), 'mid': mid.tolist(), 'scale': scale.tolist(), 'x': coefs('x'), 'y': coefs('y'), 'z': coefs('z')}]
 
 
 def get_filename(day: str) -> str:
@@ -238,7 +241,7 @@ def get_filename(day: str) -> str:
     return "orbits_"+day+".json"
 
 
-def get_SP3_file(date: str, orbit_type='MGNSS') -> str:
+def get_SP3_file(date: str, orbit_type='final') -> str:
     """Loads a file of precise satellite orbits. 
 
     Checks for local saved version otherwise fetches remotely. 
@@ -248,7 +251,7 @@ def get_SP3_file(date: str, orbit_type='MGNSS') -> str:
     date : str
         date in YYYYdoy format
     orbit_type : str, optional
-        type of precise orbit product {MGNSS, rapids}, by default 'MGNSS'
+        type of precise orbit product {final, rapid}, by default 'final'
 
     Returns
     -------
@@ -256,43 +259,31 @@ def get_SP3_file(date: str, orbit_type='MGNSS') -> str:
         orbit file contents in string format
 
     """
-    SP3_DATASITE = "http://navigation-office.esa.int/products/gnss-products/"
-    time = tm.doy_to_gps(pd.Series([date]), pd.Series([0]))
-    gpsdate = tm.gps_to_gpsweek(time)[0]
+    
 
-    if orbit_type not in ['rapids', 'MGNSS']:
-        raise ValueError('invalid orbit type selected')
+    filename = _sp3_filename[orbit_type](date)
+    
+    if not importlib.resources.is_resource(data.sp3, filename):
+        url = _sp3_datasite + _sp3_filepath(date) + filename
+        local_path = data.sp3.__path__[0]+'/'+filename
+        urllib.request.urlretrieve(url, local_path)
+        
+    zipfile = importlib.resources.read_binary(data.sp3, filename)
+    
+    extension = filename.rsplit(".", maxsplit=1)[1]
+    if extension == 'gz':
+        binary = gzip.decompress(zipfile)
+    else:
+        binary = zlib.decompress | (zipfile)
+    txt = binary.decode('utf-8')
 
-    if orbit_type == 'rapids':
-        filename = 'esu' + str(gpsdate['week']) + \
-            str(gpsdate['day']) + '_00.sp3.Z'
-    elif orbit_type == 'MGNSS':
-        filename = 'ESA0MGNFIN_' + date + '0000_01D_05M_ORB.SP3.gz'
-
-    url = SP3_DATASITE + str(gpsdate['week']) + '/' + filename
-    local = str(os.getcwd()) + '/data/sp3/' + filename
-    if not os.path.isfile(local):
-        urllib.request.urlretrieve(url, local)
-    # filetype = filename
-    # os.system('uncompress ' + str(filetype))
-    # return filetype.replace('.Z', '')
-
-    if orbit_type == 'MGNSS':
-        with gzip.open(local, 'rt', encoding='utf-8') as f:
-            file_content = f.read()
-
-    elif orbit_type == 'rapids':
-        with open(local, 'rb') as f:
-            binary_content = zlib.decompress(f.read())
-            file_content = binary_content.decode('utf-8')
-
-    return file_content
+    return txt
 
 
 def get_SP3_dataframe(sp3: str) -> pd.DataFrame:
-    """Parse a precise orbits string to retrieve orbit data.
+    """Parse a precise orbits string to retrieve orbit data_var.
 
-    Format as given here ftp://igs.org/pub/data/format/sp3c.txt
+    Format as given here ftp://igs.org/pub/data_var/format/sp3c.txt
 
     Parameters
     ----------
@@ -306,17 +297,17 @@ def get_SP3_dataframe(sp3: str) -> pd.DataFrame:
     """
 
     def get_date(row: str):
-        date = pd.Timestamp(year=row[3:7], month=row[8:10], day=row[11:13])
-        year = date.year.astype("str")
-        day = date.dayofyear.astype("str")
-        return year.str.cat(day.str.pad(3, side='left', fillchar="0"))
+        _utc = pd.Timestamp(year=int(row[3:7]), month=int(row[8:10]), day=int(row[11:13]))
+        year = str(_utc.year)
+        day = str(_utc.dayofyear)
+        return year + day.zfill(3)
 
     def get_time(row: str):
         hour = int(row[14:16])
         min = int(row[17:19])
-        sec = int(row[20:31])
+        sec = int(float(row[20:31]))
         time = hour * 3600 + min * 60 + sec
-        return time * 1e9
+        return time * 10**9
 
     def getXYS(row):
         row_list = row.split()
@@ -346,3 +337,19 @@ def get_SP3_dataframe(sp3: str) -> pd.DataFrame:
     output = pd.DataFrame(
         results, columns=['epoch', 'date', 'time', 'svid', 'x', 'y', 'z', 'clockerror'])
     return output
+
+
+""" SP3 download related functions """
+
+_sp3_datasite = "http://navigation-office.esa.int/products/gnss-products/"
+def _sp3_filepath(date):
+    return str(_sp3_filename_date_conversion(date)['week'][0])+'/'
+
+_sp3_filename = {
+    'rapid': lambda x: 'esu' + str(_sp3_filename_date_conversion(x)['week'][0]) + str(_sp3_filename_date_conversion(x)['day'][0]) + '_00.sp3.Z',
+    'final': lambda x: 'ESA0MGNFIN_' + x + '0000_01D_05M_ORB.SP3.gz'}
+
+def _sp3_filename_date_conversion(date):
+    """ Converts a doy format to gps week  """
+    time = tm.doy_to_gps(pd.Series([date]), pd.Series([0]))
+    return tm.gps_to_gpsweek(time)
