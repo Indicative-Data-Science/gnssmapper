@@ -34,7 +34,7 @@ class Accessor3D:
         if obj.__class__.__name__ != "GeoDataFrame":
             raise ValueError("Must be a GeoPandas GeoDataFrame")
         if "height" not in obj.columns:
-            raise AttributeError("Must have 'height'.")
+            raise AttributeError("Must have 'height'")
     
     def to_crs(**kwargs):
         """Transforms crs of geometry and height columns."""
@@ -473,28 +473,3 @@ def bound(wgs):
     # delta_ = np.concatenate((delta,np.ones((delta.shape[0],1))*BBOX_SIDE_LENGTH),axis=1 )  # don't move points within the box.
     scale = BBOX_SIDE_LENGTH / np.amax(np.abs(delta), axis=1)
     return ORIGIN+delta*np.expand_dims(scale, axis=1)
-
-
-def reproject(points, source, target):
-    """reproject point coords given as EPSG refs
-    Parameters
-    ----------
-    points : [n,3] array
-        points in source coords
-
-    source: string
-        EPSG code
-
-    target: code
-        EPSG code
-
-    Returns
-    -------
-    coordinates : [n,3] array
-        points in target coords
-
-    """
-    transformer = pyproj.Transformer.from_crs(source, target, always_xy=True)
-    pp = transformer.itransform(points)
-
-    return np.array(tuple(pp))

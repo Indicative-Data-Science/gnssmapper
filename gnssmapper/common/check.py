@@ -15,7 +15,7 @@ from gnssmapper.common.constants import supported_constellations
 
 def rays(rays: gpd.GeoSeries) -> None:
     # warnings
-    crs(rays)
+    crs(rays.crs)
     # errors
     tests = {
         'Missing geometries': rays.is_empty.any(),
@@ -34,7 +34,7 @@ def rays(rays: gpd.GeoSeries) -> None:
 
 def receiverpoints(points: gpd.GeoDataFrame) -> None:
     # warnings
-    crs(points.geometry)
+    crs(points.geometry.crs)
     if 'svid' in points.columns:
         constellations(
             points['svid'], supported_constellations)
@@ -88,10 +88,9 @@ def _raise(tests: dict) -> None:
     return None
 
 
-def crs(df: gpd.GeoSeries) -> None:
+def crs(crs_: pyproj.crs.CRS) -> None:
     """ Warns if crs is 2D and will be promoted for transforms"""
-    crs_ = pyproj.crs.CRS(df.crs)
-    if not crs_.is_vertical():
+    if not crs_.is_vertical:
         warnings.warn('2D crs used. Will be promoted for transforms.')
     return None
 

@@ -7,9 +7,13 @@ import geopandas as gpd
 import numpy as np
 import pygeos
 import pandas as pd
+import pyproj
+from shapely.ops import transform
+from typing import Union
 
 import gnssmapper.common as cm
 import gnssmapper.satellitedata as st
+
 
 def observe(points: gpd.GeoDataFrame, constellations: set[str] = []) -> gpd.GeoDataFrame:
     """Generates a set of observations from a receiverpoints dataframe.
@@ -51,8 +55,7 @@ def observe(points: gpd.GeoDataFrame, constellations: set[str] = []) -> gpd.GeoD
     sats = sats.set_index(['time', 'svid'])
 
     # convert points into geocentric WGS and merge
-    receiver = points.to_crs(
-        cm.constants.epsg_satellites).set_index(['time', 'svid'])
+    receiver = to_crs_3d(points,cm.constants.epsg_satellites).set_index(['time', 'svid'])
     receiver = receiver.assign(
         x=receiver.geometry.x, y=receiver.geometry.y, z=receiver.geometry.z)
     obs = receiver.merge(sats)
@@ -127,13 +130,50 @@ def filter_elevation(observations: gpd.GeoDataFrame, lb: float, ub: float) -> gp
 def elevation(lines: gpd.GeoSeries) -> np.array:
     """ Returns elevation with respect to the wgs84 ellipsoid plane centred at the start of line. """
     cm.check.rays(lines)
-    ecef = lines.to_crs(cm.constants.epsg_wgs84_cart)
-    lla = lines.to_crs(cm.constants.epsg_wgs84)
+    ecef = to_crs_3d(lines,cm.constants.epsg_wgs84_cart)
+    lla = to_crs_3d(lines,cm.constants.epsg_wgs84)
 
     # need to extract and check unit
-    delta = pygeos.get_coordinates(ecef, include_z=True)
-    lat = np.radians(lla.x)
-    long_ = np.radians(lla.y)
-    up = (np.cos(long_) * np.cos(lat), np.sin(long_) * np.cos(lat), np.sin(lat))
+    array = np.stack([np.array(a) for a in ecef],axis=0)
+    delta = array[:, 1,:] - array[:, 0,:]
+    delta = delta / np.linalg.norm(delta,axis=1,keepdims=True)
+    receiver_lla = np.stack([np.array(a)[0] for a in lla],axis=0) 
+    lat = np.radians(receiver_lla[:,0])
+    long_ = np.radians(receiver_lla[:,1])
+    up = np.stack([ np.cos(long_) * np.cos(lat),
+                    np.sin(long_)*np.cos(lat),
+                    np.sin(lat)
+                    ],axis=1)
     inner = np.sum(delta * up, axis=1)
     return np.degrees(np.arcsin(inner))
+
+def to_crs_3d(df: Union[gpd.GeoDataFrame,gpd.GeoSeries], target: pyproj.crs.CRS) -> gpd.GeoDataFrame:
+    """Reproject 3D geometry to target CRS.
+
+    Bypasses geopandas to use shapely directly, avoiding bug of dropping Z coordinate when pygeos used.
+    
+    Parameters
+    ----------
+    geometry : gpd.GeoDataFrame
+        series to be transformed
+    target : pyproj.crs.CRS
+        CRS to be transformed to
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Transformed series.
+    """
+    def transform_geoseries(geometry):
+        target_crs=pyproj.crs.CRS(target)
+        cm.check.crs(target_crs)
+        cm.check.crs(geometry.crs)
+        transformer = pyproj.Transformer.from_crs(geometry.crs, target_crs)
+        return gpd.GeoSeries([transform(transformer.transform,g) for g in geometry],crs=target)
+
+    if isinstance(df,gpd.GeoDataFrame):
+        transformed_geometry = transform_geoseries(df.geometry)
+        return df.set_geometry(transformed_geometry,crs=target)
+    else:
+        return transform_geoseries(df)
+

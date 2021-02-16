@@ -8,6 +8,7 @@ import pandas as pd
 import geopandas as gpd
 import geopandas.testing as gpt
 import pygeos
+import pyproj
 
 from gnssmapper import observations
 from gnssmapper import satellitedata
@@ -35,16 +36,27 @@ class TestObservations(unittest.TestCase):
         out=observations.rays(r,s)
         self.assertTrue(np.all(pygeos.predicates.equals(out,expected)))
 
+    def test_to_crs_3d(self) -> None:
+        target=pyproj.crs.CRS(cm.constants.epsg_wgs84)
+        transformed = observations.to_crs_3d(self.points,target)
+        self.assertTrue(pygeos.has_z(
+            pygeos.io.from_shapely(transformed.geometry)
+            ).all())
+        
+        transformed_series = observations.to_crs_3d(self.points.geometry,target)
+        self.assertTrue(pygeos.has_z(
+            pygeos.io.from_shapely(transformed_series.geometry)
+            ).all())
+
     def test_elevation(self) -> None:
         # 111319.458metres = 1 degree of longtitude  at 0 degrees latitude
         #expecting 45 degree elevation
-        geometry = pygeos.Geometry("LineString (0 0 0,0 0.001 111.319458)")
-        obs = gpd.GeoSeries(geometry, crs=cm.constants.epsg_wgs84)
-        self.assertTrue(40<observations.elevation(obs)[0]<50)
-    # def test_bound_elevations(self) -> None:
-    #     obs=Observations([527990]*4,[183005]*4,[0]*4, [np.datetime64('2020-02-11T01:00:00','ns')]*4,["G01"]*4,[528020]*4,[183005]*4,[0,0.001,30*math.tan(84.9/360*2*math.pi),30*math.tan(85/360*2*math.pi)])
-    #     pt.assert_frame_equal(bound_elevations(obs),obs.loc[1:2])
-
+        geometry = [pygeos.Geometry("LineString (0 0 0,0 0.01 1113.19458)"),
+                    pygeos.Geometry("LineString (0 45 0,0 45.01 1113.19458)"),
+                    pygeos.Geometry("LineString (0 90 0,0 90.01 1113.19458)")]
+        lines = gpd.GeoSeries(geometry, crs=cm.constants.epsg_wgs84)
+        self.assertTrue(np.all(44<observations.elevation(lines)) and np.all(46>observations.elevation(lines)))
+  
     # def test_rays(self) -> None:
     #     sats = observations._get_satellites(self.points, set(["C", "E", "G", "R"]))
     #     sats = sats.set_index(['time', 'svid'])
