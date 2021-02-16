@@ -26,7 +26,8 @@ class TestCheck(unittest.TestCase):
         
         
     def test_crs(self) -> None:
-        pass
+        self.points.crs = 'EPSG: 27700'
+        self.assertWarnsRegex(UserWarning,'2D crs',crs,self.points)
         
 
     def test_constellations(self) -> None:

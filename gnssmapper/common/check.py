@@ -9,6 +9,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pygeos
+import pyproj.crs
 
 from gnssmapper.common.constants import supported_constellations
 
@@ -89,6 +90,9 @@ def _raise(tests: dict) -> None:
 
 def crs(df: gpd.GeoSeries) -> None:
     """ Warns if crs is 2D and will be promoted for transforms"""
+    crs_ = pyproj.crs.CRS(df.crs)
+    if not crs_.is_vertical():
+        warnings.warn('2D crs used. Will be promoted for transforms.')
     return None
 
 
