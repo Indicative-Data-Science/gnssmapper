@@ -6,6 +6,7 @@ import numpy as np
 import numpy.testing as npt
 import pandas as pd
 import geopandas as gpd
+import geopandas.testing as gpt
 import pygeos
 
 from gnssmapper import observations
@@ -28,10 +29,21 @@ class TestObservations(unittest.TestCase):
         npt.assert_almost_equal(obs.loc[0,["sv_x","sv_y","sv_z"]],wgs,decimal=1)
 
     def test_rays(self) -> None:
-        r = [[0, 1], [0, 1], [0, 1]]
-        s = [[10000, 10001], [0, 1], [0, 1]]
+        r = [[0, 0, 0], [1, 1, 1]]
+        s = [[10000, 0, 0],[10001, 1, 1]]
         expected = [pygeos.Geometry("LineString (0 0 0,1000 0 0)"), pygeos.Geometry("LineString (1 1 1,1001 1 1)")]
-        npt.assert_almost_equal(observations.rays(r,s),expected)
+        out=observations.rays(r,s)
+        self.assertTrue(np.all(pygeos.predicates.equals(out,expected)))
+
+    def test_elevation(self) -> None:
+        # 111319.458metres = 1 degree of longtitude  at 0 degrees latitude
+        #expecting 45 degree elevation
+        geometry = pygeos.Geometry("LineString (0 0 0,0 0.001 111.319458)")
+        obs = gpd.GeoSeries(geometry, crs=cm.constants.epsg_wgs84)
+        self.assertTrue(40<observations.elevation(obs)[0]<50)
+    # def test_bound_elevations(self) -> None:
+    #     obs=Observations([527990]*4,[183005]*4,[0]*4, [np.datetime64('2020-02-11T01:00:00','ns')]*4,["G01"]*4,[528020]*4,[183005]*4,[0,0.001,30*math.tan(84.9/360*2*math.pi),30*math.tan(85/360*2*math.pi)])
+    #     pt.assert_frame_equal(bound_elevations(obs),obs.loc[1:2])
 
     # def test_rays(self) -> None:
     #     sats = observations._get_satellites(self.points, set(["C", "E", "G", "R"]))
@@ -59,6 +71,3 @@ class TestObservations(unittest.TestCase):
     #     self.assertTrue(min(obs.ss)>=SSLB)
     #     self.assertAlmostEqual(np.mean(obs.ss[0:10000]),45,places=0)
 
-    # def test_bound_elevations(self) -> None:
-    #     obs=Observations([527990]*4,[183005]*4,[0]*4, [np.datetime64('2020-02-11T01:00:00','ns')]*4,["G01"]*4,[528020]*4,[183005]*4,[0,0.001,30*math.tan(84.9/360*2*math.pi),30*math.tan(85/360*2*math.pi)])
-    #     pt.assert_frame_equal(bound_elevations(obs),obs.loc[1:2])

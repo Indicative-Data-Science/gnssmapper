@@ -76,9 +76,9 @@ def _get_satellites(points: gpd.GeoDataFrame, constellations: set[str]) -> pd.Da
     # Generate dataframe of all svids supported by receiver
     gps_time = cm.time.utc_to_gps(points['time'])
     sd = st.SatelliteData()
-    svids = sd.name_satellites(gps_time).explode(
-        ).dropna().rename_axis('gps_time').reset_index()
-    svids = svids[svids['svid'].str[0].isin(constellations)]
+    svids = sd.name_satellites(gps_time).explode()
+    svids = svids[svids.str[0].isin(constellations)]    
+    svids = svids.dropna().rename_axis('gps_time').reset_index()
 
     # locate the satellites
     sats = sd.locate_satellites(svids['svid'], svids['gps_time'])
@@ -94,7 +94,9 @@ def rays(receivers: list, sats: list) -> pygeos.Geometry:
     coords = [[tuple(r), tuple(s)] for r, s in zip(receivers, sats)]
     lines = pygeos.creation.linestrings(coords)
     short = pygeos.linear.line_interpolate_point(lines, cm.constants.ray_length)
-    return short
+    short_coords = pygeos.coordinates.get_coordinates(short, include_z=True)
+    coords=[[tuple(r),tuple(s)] for r,s in zip(receivers,short_coords)] 
+    return pygeos.creation.linestrings(coords)
 
 
 def filter_elevation(observations: gpd.GeoDataFrame, lb: float, ub: float) -> gpd.GeoDataFrame:
