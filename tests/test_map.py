@@ -2,77 +2,22 @@
 import unittest
 import numpy as np
 import pandas as pd
+import geopandas as gpd
 import shapely
 import numpy.testing as npt
 import math
-import simulator.map as mp
-from simulator.receiver import ReceiverPoints
-from simulator.gnss import Observations
 
-class TestBound(unittest.TestCase):
-
-    def test_bound_all_moved_inside(self):
-        points = np.random.random((1000,3))* 400000 + np.array([[3780000, -210000, 4770000]])
-        bounded = mp.bound(points)
-        def check_inside(point):
-            ORIGIN = np.array([[3980000, -10000, 4970000]])
-            BBOX_SIDE_LENGTH = np.array(100000)
-            return np.all(point<= ORIGIN + BBOX_SIDE_LENGTH+1e-7) & np.all(point> ORIGIN - BBOX_SIDE_LENGTH - 1e-7)
-
-        inside = np.apply_along_axis(check_inside,1,bounded)
-
-        self.assertTrue( np.all(inside))
-
-    def test_bound_does_not_move_boundary_points(self):
-        points = np.random.random((1000,3))* np.array([[200000,200000,0]])+ np.array([[3880000, -110000, 4870000]])
-        bounded = mp.bound(points)
-        npt.assert_almost_equal(bounded,points)
-
-    def test_bound_works_x(self):
-        x = np.array([[4080000, -10000, 4970000]])
-        y = np.array([[4180000, -10000, 4970000]])
-
-        npt.assert_almost_equal(mp.bound(y),x)
-
-    def test_bound_works_y(self):
-        x = np.array([[3980000, -110000, 4970000]])
-        y = np.array([[3980000, -210000, 4970000]])
-        npt.assert_almost_equal(mp.bound(y),x)
-
-    def test_bound_works_z(self):
-        x = np.array([[3980000, -10000, 5070000]])
-        y = np.array([[3980000, -10000, 5170000]])
-        npt.assert_almost_equal(mp.bound(y),x)
-
-    def test_bound_works_xyz(self):
-        x = np.array([[4080000, -110000, 5070000]])
-        y = np.array([[4180000, -210000, 5170000]])
-        npt.assert_almost_equal(mp.bound(y),x)
-
+import gnssmapper.map as mp
 
 class TestMapMethods(unittest.TestCase):
     def setUp(self):
-        self.map_box=mp.Map("tests/data/map/box.txt")
-
-    def test_clip_can_be_reversed(self):
-        #this can't be reversed because the clip process is actually inaccurate for close points (immaterial difference for far away points)
-        box_=shapely.geometry.box(*self.map_box.bbox).exterior
-        xy_bng = [box_.interpolate(d,True) for d in np.random.random((1000,))]
-        z_bng = [-100*200*z for z in  np.random.random((1000,))]
-        points_bng = np.array([[p.x,p.y,z] for p,z in zip(xy_bng,z_bng)])
-        internal_point=shapely.geometry.box(*self.map_box.bbox).representative_point()
-        receiver=ReceiverPoints([internal_point.x]*1000,[internal_point.y]*1000, [1]*1000,)
-
-        EPSG_WGS84_CART = 4978
-        EPSG_BNG = 27700
-
-        points_wgs=mp.reproject(points_bng,EPSG_BNG,EPSG_WGS84_CART)
-        npt.assert_almost_equal(self.map_box.clip(receiver,points_wgs),points_bng)
+        self.map_box = gpd.GeoDataFrame({'height': [10]},
+            geometry=[shapely.wkt.loads("POLYGON((528010 183010, 528010 183000,528000 183000, 528000 183010,528010 183010))")],
+            crs="epsg:27700")
 
     def test_is_outside(self):
         point = self.map_box.buildings.representative_point()
-        xy=np.array([[point.x,point.y]])
-        self.assertFalse(self.map_box.is_outside(xy))
+        self.assertFalse(np.all(map_box.map.is_outside(point))
 
     def test_isground_level(self):
         point = shapely.geometry.box(*self.map_box.bbox).representative_point()

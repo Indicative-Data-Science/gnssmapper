@@ -133,17 +133,21 @@ def elevation(lines: gpd.GeoSeries) -> np.array:
     ecef = to_crs_3d(lines,cm.constants.epsg_wgs84_cart)
     lla = to_crs_3d(lines,cm.constants.epsg_wgs84)
 
-    # need to extract and check unit
+    # extract unit vector in direction of satellite
     array = np.stack([np.array(a) for a in ecef],axis=0)
     delta = array[:, 1,:] - array[:, 0,:]
     delta = delta / np.linalg.norm(delta,axis=1,keepdims=True)
+    
+    #extract orthogonal unit vector at receiver location
     receiver_lla = np.stack([np.array(a)[0] for a in lla],axis=0) 
     lat = np.radians(receiver_lla[:,0])
     long_ = np.radians(receiver_lla[:,1])
     up = np.stack([ np.cos(long_) * np.cos(lat),
                     np.sin(long_)*np.cos(lat),
                     np.sin(lat)
-                    ],axis=1)
+                    ], axis=1)
+                    
+    # inner product                
     inner = np.sum(delta * up, axis=1)
     return np.degrees(np.arcsin(inner))
 
