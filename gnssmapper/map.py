@@ -3,12 +3,12 @@ import warnings
 import geopandas as gpd
 import numpy as np
 import pygeos
-
-
-
 import pandas as pd
 import shapely.geometry
 import math
+
+import gnssmapper.common as cm
+
 from shapely.wkt import loads
 from itertools import chain, compress, cycle, repeat
 import pyproj
@@ -23,24 +23,119 @@ a Map class for use throughout the simulator.
 
 """
 
-pd.api.extensions.register_dataframe_accessor("3D")
-class Accessor3D:
+@pd.api.extensions.register_dataframe_accessor("map")
+class AccessorMap:
     def __init__(self, gpd_obj):
-        self._validate(gpd_obj)
+        # self._validate(gpd_obj)
         self._obj = gpd_obj
     
-    @staticmethod
-    def _validate(obj):
-        if obj.__class__.__name__ != "GeoDataFrame":
-            raise ValueError("Must be a GeoPandas GeoDataFrame")
-        if "height" not in obj.columns:
-            raise AttributeError("Must have 'height'")
+    # @staticmethod
+    # def _validate(self):
+    #     if obj.__class__.__name__ != "GeoDataFrame":
+    #         raise ValueError("Must be a GeoPandas GeoDataFrame")
+    #     if "height" not in obj.columns:
+    #         raise AttributeError("Must have 'height' column")
     
-    def to_crs(**kwargs):
+    def to_crs(self,**kwargs):
         """Transforms crs of geometry and height columns."""
+        print("hello")
+        return None
 
-        pass
- 
+    def is_outside(self, points: gpd.GeoSeries, polygon:shapely.geometry.Polygon=shapely.geometry.Polygon()) -> pd.Series:
+        """ Returns boolean of whether points are outside of buildings.
+
+        Parameters
+        ----------
+        points : gpd.GeoSeries
+        polygon : shapely.geometry.Polygon, optional
+            optional bounding polygon for points, by default shapely.geometry.Polygon()
+
+        Returns
+        -------
+        pd.Series
+            boolean
+        """  
+        
+       
+        # could be sped up using a prepared poly object or an R-tree....
+        if polygon.is_empty:
+            k = not points.intersects(self.geometry)
+        else:
+            k = points.within(polygon) and not points.intersects(self.geometry)
+
+        return k
+
+    def ground_level(self, points:gpd.GeoSeries) -> pd.Series:
+        """ Returns ground level for each point. TO BE IMPLEMENTED """
+
+        # so far doesn't do anything except assuming ground level is zero
+        k = pd.Series(np.zeros((len(points),)))
+
+        return k
+
+    def is_los(self, rays:gpd.GeoSeries) -> pd.Series:
+        """Returns boolean whether rays intersects buildings.
+
+        Parameters
+        ----------
+        rays : gpd.GeoSeries
+            a collection of rays (linestrings consisting of 1 segment)
+        
+        Returns
+        -------
+        pd.Series
+            true if ray has a clear line of sight.
+        """   
+        cm.check.rays(rays)
+        
+        los = np.ones((len(rays),), dtype=bool)
+        
+
+        for building, height in zip(self.geometry, self.heights):
+            idx = los == True
+            n = sum(idx)
+            los[idx] = intersects(list(compress(rays, idx)), [
+                                  building]*n, np.ones(n,)*height)
+
+        return pd.Series(los)
+
+    def fresnel(self, rays:gpd.GeoSeries) -> pd.Series:
+        """The fresnel attenuation of a series of rays intersecting with a map.
+
+        Parameters
+        ----------
+        rays : gpd.GeoSeries
+            a collection of rays (linestrings consisting of 1 segment)
+
+        Returns
+        -------
+        pd.Series
+            diffraction/fresnel zone attenuation
+        """
+        return pd.Series([get_fresnel(ray, self.geometry, self.heights) for ray in rays])
+
+    def projected_height(self, rays:gpd.GeoSeries) -> pd.DataFrame:
+        """The fresnel attenuation of a series of rays intersecting with a map.
+
+        Parameters
+        ----------
+        rays : gpd.GeoSeries
+            a collection of rays (linestrings consisting of 1 segment)
+
+        Returns
+        -------
+        pd.DataFrame
+            height at which n observation intersects m projected building. Nan if no intersection
+        """  
+     
+        b = chain(*repeat(self.buildings, len(rays)))
+        r = chain(*zip(*repeat(rays_var, len(self.buildings))))
+
+        heights = intersection_projected_height(r, b)
+        heights = heights.reshape((-1, len(self.buildings)))
+        return pd.DataFrame(data=heights, columns=self.buildingID)
+
+
 
 
 def drop_z(map_: gpd.GeoDataFrame):
@@ -49,9 +144,6 @@ def drop_z(map_: gpd.GeoDataFrame):
         warnings.warn("Geometry contains Z co-ordinates. Removed from Map3D (height attribute)")
     map_.geometry = pygeos.apply(map_.geometry, lambda x: x, include_z=False)
     return map_     
-
-
-
 
 
 class Map:
@@ -104,158 +196,11 @@ class Map:
         self.bbox = (minx-buffer, miny-buffer, maxx+buffer, maxy+buffer)
         self.buildingID = [str(i) for i in range(len(self.buildings))]
 
-    def is_outside(self, points, polygon=shapely.geometry.Polygon()):
-        """  
-        Parameters
-        ----------
-        points: [n,2] float array
-            x-y point coordinates
-
-        polygon: shapely polygon
-
-        Returns
-        -------
-        is_outside: [n,] boolean array 
-            true if points are outside (including edge) of all buildings and inside an optional bounding polygon. 
-
-        """
-        mp = shapely.geometry.asMultiPoint(points)
-        # could be sped up using a prepared poly object or an R-tree....
-        if polygon.is_empty:
-            k = [not self.buildings.intersects(p) for p in mp]
-        else:
-            k = [polygon.contains(
-                p) and not self.buildings.intersects(p) for p in mp]
-
-        return np.array(k)
-
-    def ground_level(self, points):
-        """  
-        Parameters
-        ----------
-        points: [n,2] array
-            x-y point coordinates
-
-        Returns
-        -------
-        ground level: [n,] float array 
-            ground level for each given point. 
-
-        """
-        # so far doesn't do anything except assuming ground level is zero
-        k = np.zeros((points.shape[0],))
-
-        return k
-
-    def clip(self, points, wgs):
-        """ clips satellite positions to a projection onto the bounding box with a BNG format 
-        Parameters
-        ----------
-        points : [n,..] ReceiverPoints
-            position of receiver
-
-        wgs : [n,3] array
-            satellite positions in WGS84 cartesian coords
-
-        Returns
-        -------
-        position: [n,3] array
-            x,y coords on bounding box
-
-        """
-        EPSG_WGS84_CART = 4978
-        EPSG_BNG = 27700
-        # first the satellite wgs positions are bounded to a 100km box to ensure relative accuracy of crs transform
-        wgs_ = bound(wgs)
-        # next converted to BNG
-        bng = reproject(wgs_, EPSG_WGS84_CART, EPSG_BNG)
-
-        receiver = np.array(points[["x", "y", "z"]])
-        rays = (shapely.geometry.LineString([r, s]) for r, s in zip(
-            receiver.tolist(), bng.tolist()))
-        box_ = shapely.geometry.box(*self.bbox).exterior
-        assert np.all(is_inside(receiver[:, 0:2], shapely.geometry.box(
-            *self.bbox))), "clipping process is using lines outside the box"
-
-        intersections = (box_ & ray for ray in rays)
-        pos = np.array([intersection.coords if intersection.geom_type == 'Point' else np.array(
-            [np.nan, np.nan, np.nan]) for intersection in intersections]).squeeze()
-        assert pos.shape == wgs.squeeze(
-        ).shape, "The clipping process has not generated 1 point for each satellite"
-
-        # height=bng[:,2]-receiver[:,2]
-        # distance=np.linalg.norm(bng[:,:2]-receiver[:,:2],axis=1)
-        # elevation = np.arctan2(height,distance)
-        # return np.column_stack((pos[:,:2],elevation))
-        return pos
-
-    def is_los(self, observations):
-        """  
-        Parameters
-        ----------
-        observations : Observations
-            GNSS readings from receiver 
-
-        Returns
-        -------
-        Boolean: [n,] array
-            true if observation has a clear line of sight. 
-
-        """
-        los = np.ones((len(observations),), dtype=bool)
-        rays_var = [rays(observations)]
-
-        for building, height in zip(self.buildings, self.heights):
-            idx = los == True
-            n = sum(idx)
-            los[idx] = intersects(list(compress(rays_var, idx)), [
-                                  building]*n, np.ones(n,)*height)
-
-        return los
-
-    def fresnel(self, observations):
-        """  
-        Parameters
-        ----------
-        observations : Observations
-            GNSS readings from receiver
-
-        Returns
-        -------
-        fresnel: [n,] array 
-            the diffraction/fresnel zone attenuation. 
-
-        """
-        rays_var = rays(observations)
-        return np.array([get_fresnel(ray, self.buildings, self.heights) for ray in rays_var])
-
-    def projected_height(self, observations):
-        """  
-        Parameters
-        ----------
-        observations : Observations
-            GNSS readings from receiver
-
-        Returns
-        -------
-        height:  [n,m] dataframe
-            height at which n observation intersects m projected building. Nan if no intersection
-
-        """
-        rays_var = list(rays(observations))
-        b = chain(*repeat(self.buildings, len(rays_var)))
-        r = chain(*zip(*repeat(rays_var, len(self.buildings))))
-
-        heights = intersection_projected_height(r, b)
-        heights = heights.reshape((-1, len(self.buildings)))
-        return pd.DataFrame(data=heights, columns=self.buildingID)
-
-
 def is_inside(points, polygon):
     """  
     Parameters
     ----------
-    points: [n,2] float array
+    points: [n] array of shapely points
         x-y point coordinates
 
     polygon: shapely polygon
@@ -273,23 +218,6 @@ def is_inside(points, polygon):
 
     return np.array(k)
 
-
-def rays(observations):
-    """  turns observations into Linestrings
-    Parameters
-    ----------
-    observations : [n,..] Observations
-        GNSS readings from receiver
-
-    Returns
-    -------
-    rays: [n] list of shapely LineStrings as generator
-        rays from receiver to GNSS 
-
-    """
-    receiver = observations.loc[:, ["x", "y", "z"]].to_numpy().tolist()
-    sat = observations.loc[:, ["sv_x", "sv_y", "sv_z"]].to_numpy().tolist()
-    return (shapely.geometry.LineString([r, s]) for r, s in zip(receiver, sat))
 
 
 def intersection_projected(rays, buildings):
@@ -452,24 +380,3 @@ def fresnel_parameter(rays, diffraction_points):
                  (2 / (wavelength * distances))**0.5)
     return v
 
-
-def bound(wgs):
-    """ bounds position to a 3D bounding box of 100km surrounding London
-    Parameters
-    ----------
-    wgs : [n,3] array
-        satellite positions in WGS84 cartesian coords
-
-    Returns
-    -------
-    wgs : [n,3] array
-        satellite positions on bounding box in WGS84 cartesian coords
-
-    """
-    ORIGIN = np.array([[3980000, -10000, 4970000]]
-                      )  # London (WGS84 cartesian co-ordinates)
-    BBOX_SIDE_LENGTH = 100000
-    delta = wgs - ORIGIN
-    # delta_ = np.concatenate((delta,np.ones((delta.shape[0],1))*BBOX_SIDE_LENGTH),axis=1 )  # don't move points within the box.
-    scale = BBOX_SIDE_LENGTH / np.amax(np.abs(delta), axis=1)
-    return ORIGIN+delta*np.expand_dims(scale, axis=1)

@@ -1,4 +1,2 @@
-raw -vectorise system time
-
 map
  - how to store height in a way thats robust to crs transforms
