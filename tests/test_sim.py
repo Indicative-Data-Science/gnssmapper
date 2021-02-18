@@ -40,3 +40,17 @@ class TestPoint(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+    def test_model_signal(self) -> None:
+        obs=Observations(fresnel=np.arange(0,36,35).repeat(10000))
+        SSLB=15
+        msr_noise=1
+        mu_=45
+        obs.ss,obs.pr=model_signal(obs,SSLB,mu_,msr_noise)
+        self.assertEqual(obs.ss.shape[0],20000)
+        self.assertEqual(obs.pr.shape[0],20000)
+        self.assertTrue(min(obs.ss)>=SSLB)
+        self.assertAlmostEqual(np.mean(obs.ss[0:10000]), 45, places=0)
+        
+        

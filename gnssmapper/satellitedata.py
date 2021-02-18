@@ -3,25 +3,24 @@ This module contains methods for calculating satellite positions using IGS ephem
 
 """
 
-import json
 import bisect
 from collections import defaultdict, OrderedDict
-
-import warnings
+import gzip
+import importlib.resources
+import json
 import os
 import re
-import gzip
-import zlib
 import urllib.request
-import importlib.resources
+import warnings
+import zlib
+
 
 import pandas as pd
 import numpy as np
-from scipy.interpolate import lagrange
 from numpy.polynomial import polynomial as P
+from scipy.interpolate import lagrange
 
-import gnssmapper.common.constants as con
-import gnssmapper.common.time as tm
+import gnssmapper.common as cm
 import gnssmapper.data as data
 
 
@@ -35,17 +34,17 @@ class SatelliteData:
         days = [re.split(r'_|\.', f)[1] for f in filenames]
         return set(days)
 
-    def load_orbit(self, day: str) -> dict:
+    def _load_orbit(self, day: str) -> dict:
         try:
-            with importlib.resources.open_binary(data.orbits,get_filename(day)) as json_file:
+            with importlib.resources.open_binary(data.orbits,_get_filename(day)) as json_file:
                 data_var = json.load(json_file)
             return data_var
 
         except IOError:
             return dict()
 
-    def save_orbit(self, day: str, data_var: dict) -> None:
-        with open(data.orbits.__path__[0]+'/'+get_filename(day), 'w') as outfile:
+    def _save_orbit(self, day: str, data_var: dict) -> None:
+        with open(data.orbits.__path__[0]+'/'+_get_filename(day), 'w') as outfile:
             json.dump(data_var, outfile, indent=4)
 
     def name_satellites(self, time: pd.Series) -> pd.Series:
@@ -62,17 +61,15 @@ class SatelliteData:
             a list of svids visible at each point in time, indexed by time
         """
         # assuming list of svids is static over a day
-        days = tm.gps_to_doy(time)['date']
+        days = cm.time.gps_to_doy(time)['date']
 
-        self.update_orbits(days)
+        self._update_orbits(days)
         svids = pd.Series(days.map(lambda x: list(self.orbits[x].keys())), name='svid')
         svids.index=time
         return svids
 
     def locate_satellites(self, svid: pd.Series, time: pd.Series) -> pd.DataFrame:
-        """Returns satellite location in geocentric WGS84 coordinate.
-
-        Calls _locate_sat function, updating ephemeris files if needed.
+        """Returns satellite location in geocentric WGS84 coordinates.
 
         Parameters
         ----------
@@ -86,14 +83,13 @@ class SatelliteData:
             xyz in geocentric wgs84 co-ords 
         """
 
-        doy = tm.gps_to_doy(time)
+        doy = cm.time.gps_to_doy(time)
         days = doy['date']
         nanos = doy['time']
-        self.update_orbits(days)
+        self._update_orbits(days)
         coords = pd.DataFrame([self._locate_sat(d, t, s)
                                for d, t, s in zip(days, nanos, svid)], columns=['sv_x', 'sv_y', 'sv_z'])
         new_columns = {svid.name:svid.array,time.name:time.array}
-        print(new_columns)
         return coords.assign(**new_columns)
 
     def _locate_sat(self, day: str, time: float, svid: str) -> list:
@@ -148,7 +144,7 @@ class SatelliteData:
 
         return [predict(dim) for dim in ['x', 'y', 'z']]
 
-    def update_orbits(self, days: pd.Series) -> None:
+    def _update_orbits(self, days: pd.Series) -> None:
         """Loads orbits, updating orbit database where necessary.
 
         Parameters
@@ -161,20 +157,20 @@ class SatelliteData:
 
         for day in missing_days:
             orbit_dic = defaultdict(dict)
-            sp3 = get_SP3_file(day)
-            df = get_SP3_dataframe(sp3)
+            sp3 = _get_sp3_file(day)
+            df = _get_sp3_dataframe(sp3)
             print(f"creating {day} orbit")
-            unsorted_orbit = create_orbit(df)
+            unsorted_orbit = _create_orbit(df)
             for svid, dic in unsorted_orbit.items():
                 orbit_dic[svid] = OrderedDict(sorted(dic.items()))
-            self.save_orbit(day, orbit_dic)
+            self._save_orbit(day, orbit_dic)
 
         for day in days_:
             if day not in self.orbits:
-                self.orbits[day] = self.load_orbit(day)
+                self.orbits[day] = self._load_orbit(day)
 
 
-def create_orbit(sp3_df: pd.DataFrame) -> dict:
+def _create_orbit(sp3_df: pd.DataFrame) -> dict:
     """Creates a dictionary of Lagrangian 7th order polynomial coefficents used for interpolation. 
 
     Estimates centred at every 4th data_var point, including lower and upper time bounds of validity, scaling parameters and lagrangian coeffecients.
@@ -200,13 +196,13 @@ def create_orbit(sp3_df: pd.DataFrame) -> dict:
         if idxs[-1] != len(orbits)-5:
             idxs.append(len(orbits)-5)
         for i in idxs:
-            k, v = poly_lagrange(i, orbits)
+            k, v = _poly_lagrange(i, orbits)
             polyXYZ[id_][k] = v
 
     return polyXYZ
 
 
-def poly_lagrange(i: int, alldata: pd.DataFrame) -> list[float, dict]:
+def _poly_lagrange(i: int, alldata: pd.DataFrame) -> list[float, dict]:
     """Returns lagrangian polynomial coefficients, along with scaling parameters used to avoid problems with numerically small coeffecients.
 
     Parameters
@@ -237,12 +233,12 @@ def poly_lagrange(i: int, alldata: pd.DataFrame) -> list[float, dict]:
     return [mid.tolist()[0], {'lb': lb.tolist(), 'ub': ub.tolist(), 'mid': mid.tolist(), 'scale': scale.tolist(), 'x': coefs('x'), 'y': coefs('y'), 'z': coefs('z')}]
 
 
-def get_filename(day: str) -> str:
+def _get_filename(day: str) -> str:
 
     return "orbits_"+day+".json"
 
 
-def get_SP3_file(date: str, orbit_type='final') -> str:
+def _get_sp3_file(date: str, orbit_type='final') -> str:
     """Loads a file of precise satellite orbits. 
 
     Checks for local saved version otherwise fetches remotely. 
@@ -281,7 +277,7 @@ def get_SP3_file(date: str, orbit_type='final') -> str:
     return txt
 
 
-def get_SP3_dataframe(sp3: str) -> pd.DataFrame:
+def _get_sp3_dataframe(sp3: str) -> pd.DataFrame:
     """Parse a precise orbits string to retrieve orbit data_var.
 
     Format as given here ftp://igs.org/pub/data_var/format/sp3c.txt
@@ -352,5 +348,5 @@ _sp3_filename = {
 
 def _sp3_filename_date_conversion(date):
     """ Converts a doy format to gps week  """
-    time = tm.doy_to_gps(pd.Series([date]), pd.Series([0]))
-    return tm.gps_to_gpsweek(time)
+    time = cm.time.doy_to_gps(pd.Series([date]), pd.Series([0]))
+    return cm.time.gps_to_gpsweek(time)

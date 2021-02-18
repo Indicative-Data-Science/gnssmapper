@@ -5,7 +5,7 @@ import pandas.testing as pt
 import pandas as pd
 from io import StringIO
 
-from gnssmapper import raw
+from gnssmapper import log
 import gnssmapper.common.time as tm
 import gnssmapper.common.constants as cn
 
@@ -15,7 +15,7 @@ class TestReadCSV(unittest.TestCase):
         self.filepath = self.filedir+"log_20200211.txt"
 
     def test_read_csv_(self) -> None:
-        raw_var,fix = raw.read_csv_(self.filepath)
+        raw_var,fix = log.read_csv_(self.filepath)
         raw_expected = pd.DataFrame({
             'TimeNanos': [34554000000],
             'FullBiasNanos':[-1265446151445559028],
@@ -41,27 +41,27 @@ class TestReadCSV(unittest.TestCase):
     def test_platform(self) -> None:
         #copy of log.txt with platform replaced by 6
         wrong_platform = self.filedir+"wrong_platform.txt"
-        self.assertWarnsRegex(UserWarning,"Platform 6 found in log file",raw.read_csv_,wrong_platform)
+        self.assertWarnsRegex(UserWarning,"Platform 6 found in log file",log.read_csv_,wrong_platform)
 
     def test_version(self) -> None:
          #copy of log.txt with version replaced by 1.3.9.9
         wrong_version = self.filedir+"wrong_version.txt"
-        self.assertRaisesRegex(ValueError,"Version 1.3.9.9 found in log file",raw.read_csv_,wrong_version)
+        self.assertRaisesRegex(ValueError,"Version 1.3.9.9 found in log file",log.read_csv_,wrong_version)
 
 
     def test_compare_version(self) -> None:
         low = "1.3"
         high = "1.4"
         expected = "1.4.0.0"
-        self.assertTrue(raw._compare_version(high, expected))
-        self.assertFalse(raw._compare_version(low, expected))
+        self.assertTrue(log._compare_version(high, expected))
+        self.assertFalse(log._compare_version(low, expected))
 
     def test_compare_platform(self) -> None:
         low = set(["6","M",6])
         high = set(["7","N",7,"O",10,"10"])
         expected = "7"
-        self.assertTrue(all([raw._compare_platform(x, expected) for x in high]))
-        self.assertFalse(any([raw._compare_platform(x, expected) for x in low]))
+        self.assertTrue(all([log._compare_platform(x, expected) for x in high]))
+        self.assertFalse(any([log._compare_platform(x, expected) for x in low]))
 
 class TestProcessRaw(unittest.TestCase):
     def setUp(self):
@@ -87,7 +87,7 @@ class TestProcessRaw(unittest.TestCase):
         expected = np.array([6, 7, 8, 9, 10])*cn.nanos_in_period['E']
         testdata = np.array([1, 2, 3, 4, 5])+expected
         np.testing.assert_array_equal(
-            raw.galileo_ambiguity(testdata),
+            log.galileo_ambiguity(testdata),
             expected)
 
     def test_period_start_time(self) -> None:
@@ -99,18 +99,18 @@ class TestProcessRaw(unittest.TestCase):
                                      pd.Series([0]),
                                      pd.Series([0]))
         pt.assert_series_equal(
-            raw.period_start_time(pd.Series([rx]), pd.Series([state]), pd.Series([constellation])),
+            log.period_start_time(pd.Series([rx]), pd.Series([state]), pd.Series([constellation])),
             expected,check_names=False,check_dtype=False)
 
     def test_svid(self) -> None:
-        output = raw.process_raw(self.input)
+        output = log.process_raw(self.input)
         pt.assert_series_equal(
             output.svid,
             pd.Series(["G01"], name='svid').convert_dtypes(),
             check_names=False)
 
     def test_rx(self) -> None:
-        output = raw.process_raw(self.input)
+        output = log.process_raw(self.input)
         expected = tm.gpsweek_to_gps(self.rx.week,self.rx.day,self.rx.time)
         pt.assert_extension_array_equal(
             output.rx.array,
@@ -118,14 +118,14 @@ class TestProcessRaw(unittest.TestCase):
             check_exact=True)
 
     def test_tx(self) -> None:
-        output = raw.process_raw(self.input)
+        output = log.process_raw(self.input)
         pt.assert_extension_array_equal(
             output.tx.array,
             self.tx_gps.array,
             check_exact=True)
 
     def test_pr(self) -> None:
-        output = raw.process_raw(self.input)
+        output = log.process_raw(self.input)
         pt.assert_series_equal(
             output.pr-pd.Series([9*cn.lightspeed/100]),
             pd.Series([0.0]).convert_dtypes(convert_integer=False),
@@ -138,7 +138,7 @@ class TestProcessRaw(unittest.TestCase):
         tx_gps = tm.gpsweek_to_gps(tx_.week, tx_.day, tx_.time).convert_dtypes()
         input_ = self.input
         input_.loc[:,'ReceivedSvTimeNanos'] = tm.gpsweek_to_gps(0,0,tx_.day*cn.nanos_in_day+tx_.time)
-        output = raw.process_raw(input_)
+        output = log.process_raw(input_)
         pt.assert_extension_array_equal(
             output.tx.array,
             tx_gps.array,
@@ -150,32 +150,32 @@ class TestNA(unittest.TestCase):
         self.filepath = self.filedir+"missing.txt"
 
     def test_datatype(self) -> None:
-        raw_var, fix = raw.read_csv_(self.filepath)
+        raw_var, fix = log.read_csv_(self.filepath)
         test_columns = ["TimeNanos", "FullBiasNanos", 'ReceivedSvTimeNanos', 'ConstellationType', 'Svid', 'State']
         self.assertTrue(all(raw_var[c].dtype=='Int64' for c in test_columns))
         self.assertTrue(fix['(UTC)TimeInMs'].dtype=='Int64')
 
     def test_processing(self) -> None:
-        raw_var, gnss_fix = raw.read_csv_(self.filepath)
-        gnss_obs = raw.process_raw(raw_var)
+        raw_var, _ = log.read_csv_(self.filepath)
+        log.process_raw(raw_var)
     
     def test_joining(self) -> None:
-        raw_var, gnss_fix = raw.read_csv_(self.filepath)
-        gnss_obs = raw.process_raw(raw_var)
-        self.assertRaises(ValueError,raw.join_receiver_position,
+        raw_var, gnss_fix = log.read_csv_(self.filepath)
+        gnss_obs = log.process_raw(raw_var)
+        self.assertRaises(ValueError,log.join_receiver_position,
             gnss_obs, gnss_fix)
 
 class TestJoinReceiverPosition(unittest.TestCase):
     def setUp(self):
         self.filedir = "./tests/data/"
         self.filepath = self.filedir+"log_20200211.txt"
-        raw_var, fix = raw.read_csv_(self.filepath)
-        self.gnss_obs = raw.process_raw(raw_var[0:50])
+        raw_var, fix = log.read_csv_(self.filepath)
+        self.gnss_obs = log.process_raw(raw_var[0:50])
         self.gnss_fix=fix[0:1]
     
     def test_joining(self) -> None:
         epoch = self.gnss_obs[0:35]
-        result = raw.join_receiver_position(epoch, self.gnss_fix)
+        result = log.join_receiver_position(epoch, self.gnss_fix)
         self.assertEqual(len(result), 35)
         self.assertEqual(result.time.nunique(), 1)
         self.assertEqual(result.Longitude.nunique(), 1)
@@ -183,5 +183,5 @@ class TestJoinReceiverPosition(unittest.TestCase):
     def test_warning_on_drop(self) -> None:
         self.assertWarnsRegex(UserWarning,
                               '15 observations discarded without matching fix.',
-                              raw.join_receiver_position,
+                              log.join_receiver_position,
                               self.gnss_obs, self.gnss_fix)

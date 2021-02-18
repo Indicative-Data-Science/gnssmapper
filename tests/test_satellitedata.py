@@ -1,16 +1,18 @@
 """Unittests for the functions in svid_location, using the true data from 2020-02-11."""
 
 import copy
+from collections import OrderedDict
+import importlib.resources
 import os
 import unittest
-import importlib.resources
+
 
 import numpy as np
 import numpy.testing as npt
 import pandas as pd
 
 import gnssmapper.common.time as tm
-from gnssmapper.satellitedata import *
+import gnssmapper.satellitedata as sd
 from gnssmapper import data
 
 
@@ -23,8 +25,8 @@ class TestHelperFunctions(unittest.TestCase):
         scale=[0.7,1,2,1]
         data = {'tm': time,'x': x, 'y':y, 'z':z}
         poly = pd.DataFrame(data)
-        test1 = poly_lagrange(3,poly)
-        test2 = poly_lagrange(5,poly)
+        test1 = sd._poly_lagrange(3,poly)
+        test2 = sd._poly_lagrange(5,poly)
         self.assertAlmostEqual(test1[0],0)
         self.assertAlmostEqual(test2[0],0.2)
         self.assertAlmostEqual(test1[1]['lb'],-0.3)
@@ -42,29 +44,29 @@ class TestSP3Functions(unittest.TestCase):
         self.assertTrue(os.path.exists(local))
 
     def test_get_SP3_file(self) -> None:
-        sp3 = get_SP3_file('2020042')
+        sp3 = sd._get_sp3_file('2020042')
         self.assertIsInstance(sp3, str)
 
     def test_get_SP3_dataframe(self) -> None:
-        sp3 = get_SP3_file('2020042')
-        example_orbits = get_SP3_dataframe(sp3)
+        sp3 = sd._get_sp3_file('2020042')
+        example_orbits = sd._get_sp3_dataframe(sp3)
         self.assertIsInstance(example_orbits, pd.DataFrame)
         npt.assert_equal(list(example_orbits.columns),
                          ['epoch', 'date','time', 'svid', 'x', 'y', 'z', 'clockerror'])
         
     def test_setup(self):
-        empty=SatelliteData()
+        empty=sd.SatelliteData()
         self.assertEqual(empty.orbits,{})
 
 
 class TestSVIDLocation(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.sp3 = get_SP3_file('2020042')
-        cls.example_orbits = get_SP3_dataframe(cls.sp3)
-        cls.SatelliteData=SatelliteData()
+        cls.sp3 = sd._get_sp3_file('2020042')
+        cls.example_orbits = sd._get_sp3_dataframe(cls.sp3)
+        cls.SatelliteData=sd.SatelliteData()
         cls.truncated_orbits=cls.example_orbits.loc[np.isin(cls.example_orbits['svid'],["G18","G14"]) & (cls.example_orbits['time'] < 2*60*60*10**9)].reset_index(drop=True)
-        cls.poly=create_orbit(cls.truncated_orbits)
+        cls.poly=sd._create_orbit(cls.truncated_orbits)
         for sv,dic in cls.poly.items():
             cls.SatelliteData.orbits['2020042'][sv]= OrderedDict(sorted(dic.items()))
 
@@ -76,7 +78,7 @@ class TestSVIDLocation(unittest.TestCase):
 
     def test_update_orbits(self):
         a=copy.deepcopy(self.SatelliteData.orbits)
-        self.SatelliteData.update_orbits(np.array([]))
+        self.SatelliteData._update_orbits(np.array([]))
         self.assertDictEqual(a,self.SatelliteData.orbits)
     
     def test_locate_sat_check_entries(self):
@@ -105,7 +107,7 @@ class TestSVIDLocation(unittest.TestCase):
 class TestNameSatellites(unittest.TestCase):
     def test_naming(self) -> None:
         time = tm.utc_to_gps(pd.Series([np.datetime64('2020-02-11T00:59:42', 'ns')]))
-        data = SatelliteData()
+        data = sd.SatelliteData()
         out = data.name_satellites(time)
         self.assertSetEqual(
             set(out.iat[0]),

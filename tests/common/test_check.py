@@ -1,11 +1,12 @@
 """Unittests for the functions in check, using example datasets."""
 
 import unittest
+import pandas as pd
 import pandas.testing as pt
 import geopandas as gpd
 from pygeos import Geometry
-from gnssmapper.common.check import *
-from gnssmapper.common.check import _raise
+
+import gnssmapper.common.check as check
 import gnssmapper.common.constants as cn
 
 
@@ -22,27 +23,27 @@ class TestCheck(unittest.TestCase):
 
     def test_raise(self) -> None:
         test = {"this should be raised": 1, "but not this": 0}
-        self.assertRaisesRegex(AttributeError, "this should be raised", _raise, test)
+        self.assertRaisesRegex(AttributeError, "this should be raised", check._raise, test)
         
         
     def test_crs(self) -> None:
         self.points.set_crs('EPSG:27700',allow_override=True)
-        self.assertWarnsRegex(UserWarning,'2D crs',crs,self.points.crs)
+        self.assertWarnsRegex(UserWarning,'2D crs',check.crs,self.points.crs)
         
 
     def test_constellations(self) -> None:
         valid_receiverpoints = gpd.GeoDataFrame(self.d, geometry = self.points)
         part=set(["R","C","E"])
-        self.assertWarnsRegex(UserWarning,'Includes unsupported constellations:',constellations,valid_receiverpoints.svid,part)
+        self.assertWarnsRegex(UserWarning,'Includes unsupported constellations:',check.constellations,valid_receiverpoints.svid,part)
 
     def test_rays(self) -> None:
-        self.assertIsNone(rays(self.rays))
+        self.assertIsNone(check.rays(self.rays))
     
     def test_obs(self) -> None:
         valid_obs = gpd.GeoDataFrame(self.d, geometry=self.rays)
-        self.assertIsNone(observations(valid_obs))
+        self.assertIsNone(check.observations(valid_obs))
 
     def test_receiverpoints(self) -> None:
         valid_receiverpoints = gpd.GeoDataFrame(self.d, geometry = self.points)
-        self.assertIsNone(receiverpoints(valid_receiverpoints))
+        self.assertIsNone(check.receiverpoints(valid_receiverpoints))
 

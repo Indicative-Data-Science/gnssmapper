@@ -5,13 +5,10 @@ Contains methods for generating observations from ReceiverPoints.
 
 import geopandas as gpd
 import numpy as np
-import pygeos
 import pandas as pd
-import pyproj
-from shapely.ops import transform
-from typing import Union
 
 import gnssmapper.common as cm
+from gnssmapper.geo import rays, to_crs
 import gnssmapper.satellitedata as st
 
 
@@ -55,7 +52,7 @@ def observe(points: gpd.GeoDataFrame, constellations: set[str] = []) -> gpd.GeoD
     sats = sats.set_index(['time', 'svid'])
 
     # convert points into geocentric WGS and merge
-    receiver = to_crs_3d(points,cm.constants.epsg_satellites).set_index(['time', 'svid'])
+    receiver = to_crs(points,cm.constants.epsg_satellites).set_index(['time', 'svid'])
     receiver = receiver.assign(
         x=receiver.geometry.x, y=receiver.geometry.y, z=receiver.geometry.z)
     obs = receiver.merge(sats)
@@ -75,7 +72,8 @@ def observe(points: gpd.GeoDataFrame, constellations: set[str] = []) -> gpd.GeoD
 
 
 def _get_satellites(points: gpd.GeoDataFrame, constellations: set[str]) -> pd.DataFrame:
-    """ Dataframe of all svids visible to a set of points """    
+    """ Dataframe of all svids visible to a set of points """
+    cm.check.receiverpoints(points) 
     # Generate dataframe of all svids supported by receiver
     gps_time = cm.time.utc_to_gps(points['time'])
     sd = st.SatelliteData()
@@ -89,18 +87,6 @@ def _get_satellites(points: gpd.GeoDataFrame, constellations: set[str]) -> pd.Da
     # revert to utc time
     sats['time'] = cm.time.gps_to_utc(sats['gps_time'])
     return sats
-
-def rays(receivers: list, sats: list) -> pygeos.Geometry:
-    """ Turns arrays of points into array of linestrings.
-
-    The linestring is truncated towards the satellite. This is to avoid projected crs problems."""
-    coords = [[tuple(r), tuple(s)] for r, s in zip(receivers, sats)]
-    lines = pygeos.creation.linestrings(coords)
-    short = pygeos.linear.line_interpolate_point(lines, cm.constants.ray_length)
-    short_coords = pygeos.coordinates.get_coordinates(short, include_z=True)
-    coords=[[tuple(r),tuple(s)] for r,s in zip(receivers,short_coords)] 
-    return pygeos.creation.linestrings(coords)
-
 
 def filter_elevation(observations: gpd.GeoDataFrame, lb: float, ub: float) -> gpd.GeoDataFrame:
     """Filters observations by elevation bounds.
@@ -130,8 +116,8 @@ def filter_elevation(observations: gpd.GeoDataFrame, lb: float, ub: float) -> gp
 def elevation(lines: gpd.GeoSeries) -> np.array:
     """ Returns elevation with respect to the wgs84 ellipsoid plane centred at the start of line. """
     cm.check.rays(lines)
-    ecef = to_crs_3d(lines,cm.constants.epsg_wgs84_cart)
-    lla = to_crs_3d(lines,cm.constants.epsg_wgs84)
+    ecef = to_crs(lines,cm.constants.epsg_wgs84_cart)
+    lla = to_crs(lines,cm.constants.epsg_wgs84)
 
     # extract unit vector in direction of satellite
     array = np.stack([np.array(a) for a in ecef],axis=0)
@@ -151,33 +137,4 @@ def elevation(lines: gpd.GeoSeries) -> np.array:
     inner = np.sum(delta * up, axis=1)
     return np.degrees(np.arcsin(inner))
 
-def to_crs_3d(df: Union[gpd.GeoDataFrame,gpd.GeoSeries], target: pyproj.crs.CRS) -> gpd.GeoDataFrame:
-    """Reproject 3D geometry to target CRS.
-
-    Bypasses geopandas to use shapely directly, avoiding bug of dropping Z coordinate when pygeos used.
-    
-    Parameters
-    ----------
-    geometry : gpd.GeoDataFrame
-        series to be transformed
-    target : pyproj.crs.CRS
-        CRS to be transformed to
-
-    Returns
-    -------
-    gpd.GeoDataFrame
-        Transformed series.
-    """
-    def transform_geoseries(geometry):
-        target_crs=pyproj.crs.CRS(target)
-        cm.check.crs(target_crs)
-        cm.check.crs(geometry.crs)
-        transformer = pyproj.Transformer.from_crs(geometry.crs, target_crs)
-        return gpd.GeoSeries([transform(transformer.transform,g) for g in geometry],crs=target)
-
-    if isinstance(df,gpd.GeoDataFrame):
-        transformed_geometry = transform_geoseries(df.geometry)
-        return df.set_geometry(transformed_geometry,crs=target)
-    else:
-        return transform_geoseries(df)
 
