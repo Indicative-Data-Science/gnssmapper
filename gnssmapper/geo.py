@@ -3,6 +3,9 @@
 This module defines geometric methods that work in 3D and allow receiverpoints and observation objects to interact with a map
 
 """
+#rays,to_crs used in observations
+# fresnel,to_crs,is_outside,ground_level used in sim 
+# map_to_crs is a standalone map method
 
 import warnings
 
@@ -23,7 +26,7 @@ from shapely.wkt import loads
 from itertools import chain, compress, cycle, repeat
 import pyproj
 
-def to_crs(df: Union[gpd.GeoDataFrame,gpd.GeoSeries], target: pyproj.crs.CRS) -> gpd.GeoDataFrame:
+def to_crs(df: Union[gpd.GeoDataFrame,gpd.GeoSeries], target: pyproj.crs.CRS) -> Union[gpd.GeoDataFrame,gpd.GeoSeries]:
     """Reproject 3D geometry to target CRS.
 
     Bypasses geopandas to use shapely directly, avoiding bug of dropping Z coordinate when pygeos used.
@@ -53,7 +56,6 @@ def to_crs(df: Union[gpd.GeoDataFrame,gpd.GeoSeries], target: pyproj.crs.CRS) ->
     else:
         return transform_geoseries(df)
 
-
 def rays(receivers: list, sats: list) -> pygeos.Geometry:
     """ Turns arrays of points into array of linestrings.
 
@@ -65,11 +67,29 @@ def rays(receivers: list, sats: list) -> pygeos.Geometry:
     coords=[[tuple(r),tuple(s)] for r,s in zip(receivers,short_coords)] 
     return pygeos.creation.linestrings(coords)
 
+def map_to_crs(map_: gpd.GeoDataFrame, target: pyproj.crs.CRS) -> gpd.GeoDataFrame:
+    """Transforms map (geometry and height) to a target CRS.
 
-# def to_crs(map: gpd.GeoDataFrame,**kwargs):
-#         """Transforms crs of geometry and height columns."""
-#         print("hello")
-#         return None
+    Parameters
+    ----------
+    map_ : gpd.GeoDataFrame
+        map to be transformed
+    target : pyproj.crs.CRS
+        target CRS in any pyproj parsable format.
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        transformed map
+    """    
+    cm.check.map(map_)
+    transformed = to_crs(map_, target)
+
+    xy = map_.geometry.centroid
+    old_heights = gpd.GeoSeries(gpd.points_from_xy(xy.x, xy.y, map_.height), crs=map_.crs)
+    new_heights = to_crs(old_heights, target)
+    transformed['height'] = [point.z for point in new_heights]
+    return transformed
 
 def is_outside(map_: gpd.GeoDataFrame, points: gpd.GeoSeries, polygon:shapely.geometry.Polygon=shapely.geometry.Polygon()) -> pd.Series:
     """ Returns boolean of whether points are outside of buildings.
@@ -92,7 +112,6 @@ def is_outside(map_: gpd.GeoDataFrame, points: gpd.GeoSeries, polygon:shapely.ge
     """  
     
     
-    # could be sped up using a prepared poly object or an R-tree....
     if polygon.is_empty:
         k = ~points.intersects(map_.geometry)
     else:

@@ -70,14 +70,19 @@ def observations(obs: gpd.GeoDataFrame) -> None:
     return None
 
 
-def map(mp: gpd.GeoDataFrame) -> None:
+def map(map_: gpd.GeoDataFrame) -> None:
     #warnings
-    # crs(mp.geometry)
+    crs(map_.crs)
     tests = {
-        '"height" column missing or not float':
-            ('height' not in mp.columns) or
-            (mp['height'].dtype != "float"),   
+        'Missing geometries': map_.geometry.is_empty.any(),
+        'Unexpected z coordinates':  pygeos.has_z(
+            pygeos.io.from_shapely(map_.geometry)
+            ).any(),
+            '"height" column missing or not numeric':
+            ('height' not in map_.columns) or
+            (map_['height'].dtype != "float" and map_['height'].dtype != "int"),   
     }
+    _raise(tests)
     return None
 
 def _raise(tests: dict) -> None:

@@ -4,6 +4,7 @@ import unittest
 import pandas as pd
 import pandas.testing as pt
 import geopandas as gpd
+import shapely.wkt
 from pygeos import Geometry
 
 import gnssmapper.common.check as check
@@ -47,3 +48,8 @@ class TestCheck(unittest.TestCase):
         valid_receiverpoints = gpd.GeoDataFrame(self.d, geometry = self.points)
         self.assertIsNone(check.receiverpoints(valid_receiverpoints))
 
+    def test_map(self) -> None:
+        valid_map = gpd.GeoDataFrame({'height': [10]},
+            geometry=[shapely.wkt.loads("POLYGON((528010 183010, 528010 183000,528000 183000, 528000 183010,528010 183010))")],
+            crs="epsg:27700")
+        self.assertIsNone(check.map(valid_map))

@@ -14,6 +14,10 @@ import gnssmapper.geo as geo
 
 
 class TestObservationMethods(unittest.TestCase):
+    def setUp(self):
+        self.rays = gpd.GeoSeries([shapely.geometry.LineString([[527990, 183005, 0], [528020, 183005, 15]]),
+                                       shapely.geometry.LineString([[527990, 183005, 10], [528020, 183005, 25]])],
+                                        crs="epsg:27700")
     def test_rays(self) -> None:
         r = [[0, 0, 0], [1, 1, 1]]
         s = [[10000, 0, 0],[10001, 1, 1]]
@@ -22,17 +26,15 @@ class TestObservationMethods(unittest.TestCase):
         self.assertTrue(np.all(pygeos.predicates.equals(out,expected)))
 
     def test_to_crs(self) -> None:
-        target=pyproj.crs.CRS(cm.constants.epsg_wgs84)
-        transformed = geo.to_crs(self.points,target)
-        self.assertTrue(pygeos.has_z(
-            pygeos.io.from_shapely(transformed.geometry)
-            ).all())
-        
-        transformed_series = geo.to_crs(self.points.geometry,target)
-        self.assertTrue(pygeos.has_z(
-            pygeos.io.from_shapely(transformed_series.geometry)
-            ).all())
+        target = pyproj.crs.CRS(cm.constants.epsg_wgs84)
+        transformed= geo.to_crs(self.rays,target)
+        self.assertTrue(np.all(s.has_z for s in transformed))
+        self.assertEqual(target,transformed.crs)
 
+        df = gpd.GeoDataFrame(geometry = self.rays,crs=self.rays.crs)
+        transformed_df = geo.to_crs(df,target)
+        self.assertTrue(np.all(s.has_z for s in transformed_df.geometry))
+        self.assertEqual(target,transformed_df.crs)
 
 
 class TestShapelyMethods(unittest.TestCase):
@@ -103,6 +105,10 @@ class TestMapMethods(unittest.TestCase):
                                           shapely.geometry.LineString([(528015, 183005, 9), (528035, 183005, 9)])],
                                         crs="epsg:27700")
 
+    def test_map_to_crs(self):
+        output = geo.map_to_crs(self.map_box, cm.constants.epsg_wgs84)
+        cm.check.map(output)
+        
     def test_is_outside(self):
         point = self.map_box.geometry.representative_point()
         self.assertFalse(np.all(geo.is_outside(self.map_box, point)))
