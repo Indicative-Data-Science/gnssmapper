@@ -8,11 +8,11 @@ import numpy as np
 import pandas as pd
 
 import gnssmapper.common as cm
-from gnssmapper.geo import rays, to_crs
+from gnssmapper.geo import rays, to_crs, z
 import gnssmapper.satellitedata as st
 
 
-def observe(points: gpd.GeoDataFrame, constellations: set[str] = []) -> gpd.GeoDataFrame:
+def observe(points: gpd.GeoDataFrame, constellations: set[str] = set()) -> gpd.GeoDataFrame:
     """Generates a set of observations from a receiverpoints dataframe.
 
     Observations includes all above horizon svids, not only those measured in receiverpoints dataframe.
@@ -38,7 +38,7 @@ def observe(points: gpd.GeoDataFrame, constellations: set[str] = []) -> gpd.GeoD
     """
     #preliminaries
     cm.check.receiverpoints(points)
-    cm.check.constellations(constellations, cm.constants.supported_constellations)
+    cm.check.constellations(constellations,cm.constants.supported_constellations)
     measured_constellations = set(points['svid'].str[0].unique())
 
     if not constellations:
@@ -49,13 +49,15 @@ def observe(points: gpd.GeoDataFrame, constellations: set[str] = []) -> gpd.GeoD
             constellations = measured_constellations
 
     sats = _get_satellites(points,constellations)
-    sats = sats.set_index(['time', 'svid'])
+    # sats = sats.set_index(['time', 'svid'])
 
     # convert points into geocentric WGS and merge
-    receiver = to_crs(points,cm.constants.epsg_satellites).set_index(['time', 'svid'])
+    receiver = to_crs(points, cm.constants.epsg_satellites)
+    # receiver = receiver.set_index(['time', 'svid'])
     receiver = receiver.assign(
-        x=receiver.geometry.x, y=receiver.geometry.y, z=receiver.geometry.z)
-    obs = receiver.merge(sats)
+        x=receiver.geometry.x, y=receiver.geometry.y, z=z(receiver.geometry))
+    obs = receiver.merge(sats, on=['time', 'svid'])
+    #  left_index=True,right_index=True)
     r = obs.loc[:, ["x", "y", "z"]].to_numpy().tolist()
     s = obs.loc[:, ["sv_x", "sv_y", "sv_z"]].to_numpy().tolist()
     lines = rays(r, s)
@@ -109,8 +111,9 @@ def filter_elevation(observations: gpd.GeoDataFrame, lb: float, ub: float) -> gp
         raise ValueError(
             "Invalid elevation bounds. Must be between 0 and 90 degrees")
     e = elevation(observations.geometry)
+    valid = (lb <= e) & (e <= ub)
 
-    return observations.loc[lb <= e <= ub, :].copy()
+    return observations.loc[valid, :].copy()
 
 
 def elevation(lines: gpd.GeoSeries) -> np.array:

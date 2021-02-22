@@ -26,6 +26,10 @@ from shapely.wkt import loads
 from itertools import chain, compress, cycle, repeat
 import pyproj
 
+def z(points: gpd.GeoSeries) -> np.array:
+    """Returns Z coordinate for a set of point geometries """
+    return np.array([point.z for point in points])    
+
 def to_crs(df: Union[gpd.GeoDataFrame,gpd.GeoSeries], target: pyproj.crs.CRS) -> Union[gpd.GeoDataFrame,gpd.GeoSeries]:
     """Reproject 3D geometry to target CRS.
 

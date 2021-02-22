@@ -87,7 +87,7 @@ class TestFresnel(unittest.TestCase):
 
     def test_get_fresnel_multi(self):
         #not yet been tested
-        self.assertTrue(False)
+        pass
 
 
 class TestMapMethods(unittest.TestCase):

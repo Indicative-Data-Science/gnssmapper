@@ -4,6 +4,7 @@ Objects {rays, receiver_points, observations, maps} are special geoDataFrames.
 Not implemented as classes because of the difficulty of subclassing Pandas dataframes.
 """
 import warnings
+from typing import Union
 
 import geopandas as gpd
 import numpy as np
@@ -100,8 +101,13 @@ def crs(crs_: pyproj.crs.CRS) -> None:
     return None
 
 
-def constellations(svid: pd.Series, expected: set[str]) -> None:
-    unsupported = set(svid.str[0].unique()) - expected
+def constellations(svid: Union[pd.Series,set[str]], expected: set[str]) -> None:
+    if isinstance(svid, pd.Series):
+        present = set(svid.str[0].unique())
+    else:
+        present=set(svid)
+    
+    unsupported = present - expected
     if unsupported:
         warnings.warn(f'Includes unsupported constellations: {unsupported}')
     return None

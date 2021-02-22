@@ -155,14 +155,18 @@ class SatelliteData:
         days_ = set(days)
         missing_days = days_ - self.metadata
 
+        if missing_days:
+            print(f"{missing_days} orbits are missing and must be created.")
         for day in missing_days:
             orbit_dic = defaultdict(dict)
+            print(f"downloading sp3 file for {day}.")
             sp3 = _get_sp3_file(day)
             df = _get_sp3_dataframe(sp3)
-            print(f"creating {day} orbit")
+            print(f"creating {day} orbit.")
             unsorted_orbit = _create_orbit(df)
             for svid, dic in unsorted_orbit.items():
                 orbit_dic[svid] = OrderedDict(sorted(dic.items()))
+            print(f"saving {day} orbit.")
             self._save_orbit(day, orbit_dic)
 
         for day in days_:
