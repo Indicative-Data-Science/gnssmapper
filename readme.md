@@ -48,7 +48,7 @@ The map form is a collection of 2D geometries, with a height column. This repres
 
 Example Data
 ------------
-In the folder 'example' there are a series of gnsslogger files created as part of a pilot study, that can be used for testing and analysis.
+In the folder 'examplefiles' there are a series of gnsslogger files created as part of a pilot study, that can be used for testing and analysis.
 
 
 

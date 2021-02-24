@@ -28,8 +28,8 @@ class TestCheck(unittest.TestCase):
         
         
     def test_crs(self) -> None:
-        self.points.set_crs('EPSG:27700',allow_override=True)
-        self.assertWarnsRegex(UserWarning,'2D crs',check.crs,self.points.crs)
+        bng = self.points.set_crs('EPSG:27700',allow_override=True)
+        self.assertWarnsRegex(UserWarning,'2D crs',check.crs,bng.crs)
         
 
     def test_constellations(self) -> None:

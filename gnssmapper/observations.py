@@ -38,8 +38,9 @@ def observe(points: gpd.GeoDataFrame, constellations: set[str] = set()) -> gpd.G
     """
     #preliminaries
     cm.check.receiverpoints(points)
-    cm.check.constellations(constellations,cm.constants.supported_constellations)
-    measured_constellations = set(points['svid'].str[0].unique())
+    cm.check.constellations(constellations, cm.constants.supported_constellations)
+    
+    measured_constellations = set(points['svid'].str[0].unique()) if 'svid' in points.columns else set()
 
     if not constellations:
         if not measured_constellations:
@@ -49,33 +50,38 @@ def observe(points: gpd.GeoDataFrame, constellations: set[str] = set()) -> gpd.G
             constellations = measured_constellations
 
     sats = _get_satellites(points,constellations)
-    # sats = sats.set_index(['time', 'svid'])
+    
 
     # convert points into geocentric WGS and merge
     receiver = to_crs(points, cm.constants.epsg_satellites)
-    # receiver = receiver.set_index(['time', 'svid'])
-    receiver = receiver.assign(
-        x=receiver.geometry.x, y=receiver.geometry.y, z=z(receiver.geometry))
-    obs = receiver.merge(sats, on=['time', 'svid'])
-    #  left_index=True,right_index=True)
+    location = receiver[['time']].assign(
+        x=receiver.geometry.x, y=receiver.geometry.y, z=z(receiver.geometry)).drop_duplicates()
+    obs = location.merge(sats, how='right',on=['time'])
+
+    #add measurements if any taken
+    if 'svid' in receiver.columns:
+        measurement = receiver.drop(columns=['geometry'])
+        obs= obs.merge(measurement, how = 'left',on=['svid','time'])
+    
     r = obs.loc[:, ["x", "y", "z"]].to_numpy().tolist()
     s = obs.loc[:, ["sv_x", "sv_y", "sv_z"]].to_numpy().tolist()
     lines = rays(r, s)
 
-    obs = obs.drop(columns=['x', 'y', 'z', 'sv_x', 'sv_y', 'sv_z', 'geometry'])
+    obs = obs.drop(columns=['x', 'y', 'z', 'sv_x', 'sv_y', 'sv_z'])
     obs = gpd.GeoDataFrame(obs, crs=cm.constants.epsg_satellites, geometry=lines)
     cm.check.observations(obs)
     
     # filter observations
     obs = filter_elevation(obs, cm.constants.minimum_elevation,
                            cm.constants.maximum_elevation)
-    
+    obs.reset_index(drop=True,inplace=True)
+
     return obs
 
 
 def _get_satellites(points: gpd.GeoDataFrame, constellations: set[str]) -> pd.DataFrame:
     """ Dataframe of all svids visible to a set of points """
-    cm.check.receiverpoints(points) 
+    # cm.check.receiverpoints(points) 
     # Generate dataframe of all svids supported by receiver
     gps_time = cm.time.utc_to_gps(points['time'])
     sd = st.SatelliteData()
@@ -128,9 +134,10 @@ def elevation(lines: gpd.GeoSeries) -> np.array:
     delta = delta / np.linalg.norm(delta,axis=1,keepdims=True)
     
     #extract orthogonal unit vector at receiver location
-    receiver_lla = np.stack([np.array(a)[0] for a in lla],axis=0) 
-    lat = np.radians(receiver_lla[:,0])
-    long_ = np.radians(receiver_lla[:,1])
+    receiver_lla = np.stack([np.array(a)[0] for a in lla], axis=0)
+    #NB: coords are in xy order.
+    lat = np.radians(receiver_lla[:,1])
+    long_ = np.radians(receiver_lla[:,0])
     up = np.stack([ np.cos(long_) * np.cos(lat),
                     np.sin(long_)*np.cos(lat),
                     np.sin(lat)

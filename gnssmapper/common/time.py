@@ -73,7 +73,7 @@ def gpsweek_to_gps(
 
 def utc_to_int(time: pd.Series) -> pd.Series:
     """ Turns a timestamp into number of nanoseconds (propogates NaT values) """
-    return pd.Series(time.array, dtype='Int64').where(time.notna(), pd.NA).astype('Int64')
+    return pd.Series(time.array, dtype='Int64',index=time.index,name=time.name).where(time.notna(), pd.NA).astype('Int64')
     
 
 def _check_nanos(time: pd.Series) -> None:

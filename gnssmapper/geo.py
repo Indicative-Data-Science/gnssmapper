@@ -26,14 +26,14 @@ from shapely.wkt import loads
 from itertools import chain, compress, cycle, repeat
 import pyproj
 
-def z(points: gpd.GeoSeries) -> np.array:
+def z(points: gpd.GeoSeries) -> pd.Series:
     """Returns Z coordinate for a set of point geometries """
-    return np.array([point.z for point in points])    
+    return pd.Series((point.z for point in points),index=points.index)    
 
 def to_crs(df: Union[gpd.GeoDataFrame,gpd.GeoSeries], target: pyproj.crs.CRS) -> Union[gpd.GeoDataFrame,gpd.GeoSeries]:
-    """Reproject 3D geometry to target CRS.
+    """Reproject 3D geometry to target CRS. Assumes XY axis order.
 
-    Bypasses geopandas to use shapely directly, avoiding bug of dropping Z coordinate when pygeos used.
+    Bypasses geopandas to use pyproj directly, avoiding bug of dropping Z coordinate when pygeos used.
     
     Parameters
     ----------
@@ -51,14 +51,14 @@ def to_crs(df: Union[gpd.GeoDataFrame,gpd.GeoSeries], target: pyproj.crs.CRS) ->
         target_crs=pyproj.crs.CRS(target)
         cm.check.crs(target_crs)
         cm.check.crs(geometry.crs)
-        transformer = pyproj.Transformer.from_crs(geometry.crs, target_crs)
-        return gpd.GeoSeries([transform(transformer.transform,g) for g in geometry],crs=target)
+        transformer = pyproj.Transformer.from_crs(geometry.crs, target_crs,always_xy=True)
+        return (transform(transformer.transform,g) for g in geometry)
 
     if isinstance(df,gpd.GeoDataFrame):
         transformed_geometry = transform_geoseries(df.geometry)
-        return df.set_geometry(transformed_geometry,crs=target)
+        return df.set_geometry(list(transformed_geometry),crs=target)
     else:
-        return transform_geoseries(df)
+        return gpd.GeoSeries(transform_geoseries(df),crs=target,index=df.index,name=df.name)
 
 def rays(receivers: list, sats: list) -> pygeos.Geometry:
     """ Turns arrays of points into array of linestrings.
@@ -115,21 +115,22 @@ def is_outside(map_: gpd.GeoDataFrame, points: gpd.GeoSeries, polygon:shapely.ge
         Boolean.
     """  
     
+
     
     if polygon.is_empty:
-        k = ~points.intersects(map_.geometry)
+        k = (~np.any(map_.geometry.intersects(p)) for p in points)
     else:
-        k = points.within(polygon) & ~points.intersects(map_.geometry)
+        k = (p.within(polygon) and ~np.any(map_.geometry.intersects(p)) for p in points)
 
-    return k
+    return pd.Series(k,index=points.index)
 
 def ground_level(map_, points:gpd.GeoSeries) -> pd.Series:
     """ Returns ground level for each point. TO BE IMPLEMENTED """
 
     # so far doesn't do anything except assuming ground level is zero
-    k = pd.Series(np.zeros((len(points),)))
+    k = np.zeros((len(points),))
 
-    return k
+    return pd.Series(k,index=points.index)
 
 def is_los(map_, rays:gpd.GeoSeries) -> pd.Series:
     """Returns boolean whether rays intersects buildings.
@@ -157,7 +158,7 @@ def is_los(map_, rays:gpd.GeoSeries) -> pd.Series:
         los[idx] = intersects(list(compress(rays, idx)), [
                                 building]*n, np.ones(n,)*height)
 
-    return pd.Series(los)
+    return pd.Series(los,index=rays.index)
 
 def fresnel(map_, rays:gpd.GeoSeries) -> pd.Series:
     """The fresnel attenuation of a series of rays intersecting with a map.
@@ -174,7 +175,7 @@ def fresnel(map_, rays:gpd.GeoSeries) -> pd.Series:
     pd.Series
         diffraction/fresnel zone attenuation
     """
-    return pd.Series([get_fresnel(ray, map_.geometry, map_.heights) for ray in rays])
+    return pd.Series((get_fresnel(ray, map_.geometry.array, map_.height.array) for ray in rays),index=rays.index)
 
 def projected_height(map_, rays:gpd.GeoSeries) -> pd.DataFrame:
     """The fresnel attenuation of a series of rays intersecting with a map.
@@ -197,7 +198,7 @@ def projected_height(map_, rays:gpd.GeoSeries) -> pd.DataFrame:
 
     heights = intersection_projected_height(r, b)
     heights = heights.reshape((-1, len(map_.geometry)))
-    return pd.DataFrame(data=heights, columns=map_.index)
+    return pd.DataFrame(data=heights, columns=map_.index,index=rays.index)
 
 
 def drop_z(map_: gpd.GeoDataFrame):
@@ -359,7 +360,6 @@ def fresnel_integral(v_array):
             return 20 * math.log(0.225/v)
 
     return np.array([-J(_) for _ in v_array])
-    # return np.where( v<-0.7 , 0 , 6.9 + 20 * np.log(((v-0.1)**2 +1)**0.5 +v -0.1  )) #where did this come from?
 
 
 def fresnel_parameter(rays, diffraction_points):

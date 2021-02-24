@@ -162,7 +162,8 @@ class TestNA(unittest.TestCase):
     def test_joining(self) -> None:
         raw_var, gnss_fix = log.read_csv_(self.filepath)
         gnss_obs = log.process_raw(raw_var)
-        self.assertRaises(ValueError,log.join_receiver_position,
+        self.assertWarnsRegex(UserWarning,
+                              '37 observations discarded without matching fix.',log.join_receiver_position,
             gnss_obs, gnss_fix)
 
 class TestJoinReceiverPosition(unittest.TestCase):

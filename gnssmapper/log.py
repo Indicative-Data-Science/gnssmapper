@@ -217,15 +217,20 @@ def join_receiver_position(
 
     Joined by utc time in milliseconds.
     """
-    df = gnss_obs.join(gnss_fix.set_index("(UTC)TimeInMs"),
-                       on="time_ms", how="inner",lsuffix="obs",rsuffix="fix")
+    clean_fix = gnss_fix[["Longitude","Latitude","Altitude","(UTC)TimeInMs"]].dropna().set_index("(UTC)TimeInMs")
+    df = gnss_obs.join(clean_fix,
+                       on="time_ms", how="inner", lsuffix="obs", rsuffix="fix")
+    df.reset_index(drop=True, inplace = True)
+    df
     if len(df) != len(gnss_obs):
         warnings.warn(
             f'{len(gnss_obs)-len(df)} observations discarded without matching fix.'
         )
+    
+
     gdf = gpd.GeoDataFrame(
         df,
-        geometry=gpd.points_from_xy(df["Latitude"], df["Longitude"],
+        geometry=gpd.points_from_xy(df["Longitude"],df["Latitude"], 
                                     df["Altitude"]),
         crs=cm.constants.epsg_gnss_logger)
     return gdf

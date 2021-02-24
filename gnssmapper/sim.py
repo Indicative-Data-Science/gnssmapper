@@ -175,7 +175,8 @@ def point_process(map_:gpd.GeoDataFrame, num_samples:int, start:pd.Timestamp,end
     gpd.GeoDataFrame
         Receiverpoints
     """
-    
+    cm.check.map(map_)
+
     if num_samples <= 0:
         return gpd.GeoDataFrame()
 

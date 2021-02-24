@@ -28,14 +28,14 @@ class TestPointProcess(unittest.TestCase):
         self.assertTrue(all([self.polygon.contains(p) for p in points]))
 
     def test_point_process(self):
-        points = sim.point_process(self.map_box,1000,self.start,self.end,self.polygon)
+        points = sim.point_process(self.map_box,100,self.start,self.end,self.polygon)
         self.assertTrue(np.all(points["time"]>=np.datetime64('2020-09-01T09:00')))
         self.assertTrue(np.all(points["time"]<=np.datetime64('2020-09-01T10:00')))
         self.assertTrue(np.all(s.z>0 for s in points.geometry))
 
     def test_random_walk(self):
-        points = sim.random_walk(self.map_box,1000,self.start,self.end,self.polygon)
-        self.assertTrue(np.all(geo.is_outside(self.map_box,points)))
+        points = sim.random_walk(self.map_box,100,self.start,self.end,self.polygon)
+        self.assertTrue(np.all(geo.is_outside(self.map_box,points.geometry)))
         self.assertTrue(all([self.polygon.contains(p) for p in points.geometry]))
         self.assertTrue(np.all(points["time"]>=np.datetime64('2020-09-01T09:00')))
         self.assertTrue(np.all(points["time"]<=(np.datetime64('2020-09-01T10:00')+np.timedelta64(1,'ms'))))
