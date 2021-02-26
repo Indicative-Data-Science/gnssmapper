@@ -3,8 +3,9 @@
 Objects {rays, receiver_points, observations, maps} are special geoDataFrames.
 Not implemented as classes because of the difficulty of subclassing Pandas dataframes.
 """
-import warnings
 from typing import Union
+import warnings
+
 
 import geopandas as gpd
 import numpy as np
@@ -59,7 +60,7 @@ def observations(obs: gpd.GeoDataFrame) -> None:
     tests = {
         '"svid" column missing or not string':
             ('svid' not in obs.columns) or
-            (obs['svid'].dtype != "object"),
+            ((obs['svid'].dtype !="object") and(obs['svid'].dtype !='StringDtype')),
         '"time" column missing or not datetime':
             ('time' not in obs.columns) or
             (obs['time'].dtype != "datetime64[ns]"),

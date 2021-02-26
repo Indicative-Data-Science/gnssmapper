@@ -83,7 +83,7 @@ def _get_satellites(points: gpd.GeoDataFrame, constellations: set[str]) -> pd.Da
     """ Dataframe of all svids visible to a set of points """
     # cm.check.receiverpoints(points) 
     # Generate dataframe of all svids supported by receiver
-    gps_time = cm.time.utc_to_gps(points['time'])
+    gps_time = cm.time.utc_to_gps(points['time'].drop_duplicates())
     sd = st.SatelliteData()
     svids = sd.name_satellites(gps_time).explode()
     svids = svids[svids.str[0].isin(constellations)]    
@@ -94,6 +94,7 @@ def _get_satellites(points: gpd.GeoDataFrame, constellations: set[str]) -> pd.Da
 
     # revert to utc time
     sats['time'] = cm.time.gps_to_utc(sats['gps_time'])
+    sats.drop(columns=['gps_time'],inplace=True)
     return sats
 
 def filter_elevation(observations: gpd.GeoDataFrame, lb: float, ub: float) -> gpd.GeoDataFrame:

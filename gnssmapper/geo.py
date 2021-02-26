@@ -7,24 +7,21 @@ This module defines geometric methods that work in 3D and allow receiverpoints a
 # fresnel,to_crs,is_outside,ground_level used in sim 
 # map_to_crs is a standalone map method
 
+from itertools import chain, compress, cycle, repeat
+from typing import Union
 import warnings
+
 
 import geopandas as gpd
 import numpy as np
-import pygeos
 import pandas as pd
-import shapely.geometry
-import math
 import pyproj
-
+import pygeos
+import shapely.geometry
 from shapely.ops import transform
-from typing import Union
+from shapely.wkt import loads
 
 import gnssmapper.common as cm
-
-from shapely.wkt import loads
-from itertools import chain, compress, cycle, repeat
-import pyproj
 
 def z(points: gpd.GeoSeries) -> pd.Series:
     """Returns Z coordinate for a set of point geometries """
@@ -47,6 +44,7 @@ def to_crs(df: Union[gpd.GeoDataFrame,gpd.GeoSeries], target: pyproj.crs.CRS) ->
     gpd.GeoDataFrame
         Transformed series.
     """
+    
     def transform_geoseries(geometry):
         target_crs=pyproj.crs.CRS(target)
         cm.check.crs(target_crs)
@@ -193,12 +191,13 @@ def projected_height(map_, rays:gpd.GeoSeries) -> pd.DataFrame:
         height at which n observation intersects m projected building. Nan if no intersection
     """  
     
-    b = chain(*repeat(map_.geometry, len(rays)))
-    r = chain(*zip(*repeat(rays, len(map_.geometry))))
+    rays_ = to_crs(rays,map_.crs)
+    b = chain(*repeat(map_.geometry, len(rays_)))
+    r = chain(*zip(*repeat(rays_, len(map_.geometry))))
 
     heights = intersection_projected_height(r, b)
     heights = heights.reshape((-1, len(map_.geometry)))
-    return pd.DataFrame(data=heights, columns=map_.index,index=rays.index)
+    return pd.DataFrame(data=heights, columns=map_.index,index=rays_.index)
 
 
 def drop_z(map_: gpd.GeoDataFrame):
@@ -248,9 +247,13 @@ def intersection_projected(rays, buildings):
                      ray in zip(buildings, rays))
 
     def lowest(points):
-        coords = np.asarray(points)
-        lowest = np.nonzero(coords[:, 2] == min(coords[:, 2]))
-        return points[lowest[0][0]]
+        if points.geom_type == 'Point':
+            return points
+        # coords = np.asarray(points)
+        # # lowest = np.nonzero(coords[:, 2] == min(coords[:, 2]))
+        # lowest = np.argmin(coords[:, 2]
+        # return points[lowest]
+        return min(points,key = lambda x: x.z)
 
     return (points if points.is_empty else lowest(points) for points in intersections)
 
@@ -351,13 +354,13 @@ def fresnel_integral(v_array):
         if v < -1:
             return 0
         if v < 0 and v >= -1:
-            return 20 * math.log(0.5 - 0.62*v)
+            return 20 * np.log(0.5 - 0.62*v)
         if v < 1 and v >= 0:
-            return 20 * math.log(0.5 * math.exp(-0.95*v))
+            return 20 * np.log(0.5 * np.exp(-0.95*v))
         if v < 2.4 and v >= 1:
-            return 20 * math.log(0.4 - (0.1184-(0.38-0.1*v)**2)**0.5)
+            return 20 * np.log(0.4 - (0.1184-(0.38-0.1*v)**2)**0.5)
         if v >= 2.4:
-            return 20 * math.log(0.225/v)
+            return 20 * np.log(0.225/v)
 
     return np.array([-J(_) for _ in v_array])
 

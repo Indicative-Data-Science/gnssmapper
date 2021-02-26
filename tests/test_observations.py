@@ -29,6 +29,13 @@ class TestObservations(unittest.TestCase):
         wgs=data._locate_sat("2020042",3600*1e9,obs.svid[0])
         npt.assert_almost_equal(obs.loc[0,["sv_x","sv_y","sv_z"]],wgs,decimal=1)
 
+    def test_get_multiple_satellites(self) -> None:
+        points2 = pd.concat([self.points, self.points]).reset_index(drop=True)
+        points2['svid']=['C06','C07']
+        obs = observations._get_satellites(self.points, set(["C", "E", "G", "R"]))
+        obs2 = observations._get_satellites(points2, set(["C", "E", "G", "R"]))
+        pd.testing.assert_frame_equal(obs,obs2)
+        
 
     def test_elevation(self) -> None:
         # 111319.458metres = 1 degree of longtitude  at 0 degrees latitude

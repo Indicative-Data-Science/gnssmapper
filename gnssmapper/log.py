@@ -2,13 +2,13 @@
 Module contains methods for processing raw GNSS data eg from gnss logger.
 """
 
-import warnings
-from typing import Tuple
 from io import StringIO
+from typing import Tuple
+import warnings
 
-import pandas as pd
-import numpy as np
 import geopandas as gpd
+import numpy as np
+import pandas as pd
 
 import gnssmapper.common as cm
 
@@ -165,6 +165,10 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
               rx, gnss_raw['State'], constellation)
           + constellation.map(cm.constants.constellation_epoch_offset).convert_dtypes())
 
+    #glonasss already accounts for leap seconds.
+    tx = tx + cm.constants.leap_seconds(cm.time.gps_to_utc(tx)).where(constellation == 'R',0)* 10**9
+
+
     # This will fail if the rx and tx are in seperate weeks
     # add code to remove a week if failed
     check_ = rx > tx
@@ -175,8 +179,8 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
         tx = tx.where(check_,tx-correction)
 
     # check we have no nonsense psuedoranges
-    assert 0 < np.min(rx - tx) <= np.max(rx -
-                                         tx) < 1e9, f'Calculated pr time outside 0 to 1 seconds: {np.min(rx-tx)} - {np.max(rx-tx)}'
+    if not(0 < np.min(rx - tx) <= np.max(rx - tx) < 1e9):
+        warnings.warn(f'Calculated pr time outside 0 to 1 seconds: {np.min(rx-tx)} - {np.max(rx-tx)}')
 
     # Pseudorange
     pr = (rx-tx) * (10**-9) * cm.constants.lightspeed

@@ -15,9 +15,9 @@ import warnings
 import zlib
 
 
-import pandas as pd
 import numpy as np
 from numpy.polynomial import polynomial as P
+import pandas as pd
 from scipy.interpolate import lagrange
 
 import gnssmapper.common as cm

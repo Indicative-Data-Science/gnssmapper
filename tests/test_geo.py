@@ -49,7 +49,19 @@ class TestShapelyMethods(unittest.TestCase):
     def test_intersection_projected(self):
         fifteen = shapely.geometry.LineString([[527990,183005,10],[528020,183005,25]])
         point = geo.intersection_projected([fifteen], [self.building])
-        npt.assert_array_almost_equal(np.array(list(point)[0].coords).flatten(),[528000,183005,15])
+        npt.assert_array_almost_equal(np.array(list(point)[0].coords).flatten(), [528000, 183005, 15])
+
+        inside = shapely.geometry.LineString([[528005,183005,10],[528020,183005,25]])
+        inside_point = geo.intersection_projected([inside], [self.building])
+        npt.assert_array_almost_equal(np.array(list(inside_point)[0].coords).flatten(), [528010, 183005, 15])
+
+        outside = shapely.geometry.LineString([[527990,183015,10],[528020,183015,25]])
+        outside_point = geo.intersection_projected([outside], [self.building])
+        self.assertTrue(list(outside_point)[0].is_empty)
+        empty = shapely.geometry.LineString()
+        empty_point = geo.intersection_projected([empty], [self.building])
+        self.assertTrue(list(empty_point)[0].is_empty)
+
 
     def test_intersection_projected_height(self):
         fifteen = shapely.geometry.LineString([[527990,183005,10],[528020,183005,25]])

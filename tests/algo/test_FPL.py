@@ -1,7 +1,7 @@
 """Unittests for the functions in svid_location, using the true data from 2020-02-11."""
 
 import unittest
-from algorithms.FPL import *
+
 import numpy.testing as npt
 import pandas.testing as pt
 from itertools import product
@@ -9,17 +9,20 @@ import numpy as np
 import math
 from scipy.special import expit
 
+from gnssmapper.algo.FPL import FourParamLogisticRegression
+
+
 class TestFPL(unittest.TestCase):
     def setUp(self) -> None:
         self.fpl = FourParamLogisticRegression()
-        self.fpl.a, self.fpl.b, self.fpl.c, self.fpl.d = 0.95, 1, 1, 0.05
-        self.batch_size=3
+        self.fpl.param = np.array([0.95, 1, 1, 0.05])
+        self.fpl.batch_size=3
 
     def test_four_param_sigmoid(self) -> None:
-        self.assertAlmostEqual(self.fpl.four_param_sigmoid(1),0.5)
-        self.assertAlmostEqual(self.fpl.four_param_sigmoid(1e6),0.95)
-        self.assertAlmostEqual(self.fpl.four_param_sigmoid(-1e6),0.05)
-        self.assertAlmostEqual(self.fpl.four_param_sigmoid(2),0.05+0.9/(1+math.exp(-1)))
+        self.assertAlmostEqual(self.fpl._four_param_sigmoid(1),0.5)
+        self.assertAlmostEqual(self.fpl._four_param_sigmoid(1e6),0.95)
+        self.assertAlmostEqual(self.fpl._four_param_sigmoid(-1e6),0.05)
+        self.assertAlmostEqual(self.fpl._four_param_sigmoid(2),0.05+0.9/(1+math.exp(-1)))
 
     def test_batch_update(self) -> None:
         xhat=np.array((1,1))
@@ -30,20 +33,20 @@ class TestFPL(unittest.TestCase):
         # delta_c = -0.45 
         # delta_d = 1
         a,b,c,d =0.95 -self.fpl.lr[0], 1, 1+0.45*self.fpl.lr[2], 0.05 -self.fpl.lr[3]
-        self.fpl.batch_update(xhat,ytrue)
-        self.assertAlmostEqual(self.fpl.a,a)
-        self.assertAlmostEqual(self.fpl.b,b)
-        self.assertAlmostEqual(self.fpl.c,c)
-        self.assertAlmostEqual(self.fpl.d,d)
+        self.fpl._batch_update(xhat,ytrue)
+        self.assertAlmostEqual(self.fpl.param[0],a)
+        self.assertAlmostEqual(self.fpl.param[1],b)
+        self.assertAlmostEqual(self.fpl.param[2],c)
+        self.assertAlmostEqual(self.fpl.param[3],d)
 
 
     def test_fit_online(self) -> None:
         X=np.arange(10)
-        Y=np.array([1]*10)
+        Y = np.array([1] * 10)
         p=self.fpl.fit_online(X,Y)
         self.assertEqual(len(p),10)
         self.assertEqual(len(p[9]),4)
-        npt.assert_almost_equal(p[9],[self.fpl.a,self.fpl.b,self.fpl.c,self.fpl.d])
+        npt.assert_almost_equal(p[9],self.fpl.param)
         updates = max(max([abs(i-j) for i,j in zip(p[n],p[n+1])] for n in range(9) if n not in {2,5,8,9}))
         self.assertAlmostEqual(updates,0)
 
@@ -54,11 +57,10 @@ class TestFPL(unittest.TestCase):
 
         self.fpl.fit_offline(X,Y)
 
-        theta=[self.fpl.a,self.fpl.b,self.fpl.c,self.fpl.d]
+        theta=self.fpl.param
 
         def neg_log_likelihood(theta, X, y):
             m = X.shape[0]
-            denom_ = 1 + np.exp( - theta[1] * (X - theta[2]) )
             yhat = theta[3] + (theta[0] - theta[3]) *expit(theta[1] * (X - theta[2]) )
             return -(1 / m) * np.sum(y*np.log(yhat) + (1 - y)*np.log(1 - yhat))
 

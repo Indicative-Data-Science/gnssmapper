@@ -45,12 +45,20 @@ nanos_in_period = {
 }
 
 # offset of gnss epoch from gps
+# constellation_epoch_offset = {
+#     'G': 0,
+#     'R': 86400 * 10**9,
+#     'C': 14 * 10**9,
+#     'E': -10800*10**9 + 18*10**9,
+# }
 constellation_epoch_offset = {
     'G': 0,
-    'R': 86400 * 10**9,
+    'R': - 3* 3600 * 10**9,
     'C': 14 * 10**9,
-    'E': -10800*10**9 + 18*10**9,
+    'E': 0,
 }
+
+
 
 # lightspeed in m/s
 lightspeed = 299792458
@@ -62,20 +70,18 @@ nanos_in_day = 86400 * 10**9
 gps_epoch = pd.to_datetime('1980-01-06', format="%Y-%m-%d")
 
 
-def leap_seconds(time) -> int:
+def leap_seconds(time:pd.Series) -> pd.Series:
     """gps leap seconds."""
     # add to lists as gps seconds announced
     ls_dates_str = ['2015-07-01', '2017-01-01']
     ls_dates = pd.to_datetime(ls_dates_str, format="%Y-%m-%d")
-    
-    if pd.isnull(time):
-        return np.nan
-    else:
-        ls = [np.nan, 17, 18]
-        idx = bisect.bisect_right(ls_dates, time)
-        if idx == 0:
-            warnings.warn(f"GPS leap seconds only defined post {ls_dates[0]}")
-        return ls[idx]
+    ls = np.array([np.nan, 17, 18])
+    idx = np.searchsorted(ls_dates,time,side='right')
+    if np.min(idx) == 0:
+        warnings.warn(f"GPS leap seconds only defined post {ls_dates[0]}")
+    output = np.where(pd.isnull(time),np.nan,ls[idx])  
+
+    return pd.Series(output,index=time.index,name=time.name).convert_dtypes()
 
 
 epsg_satellites = 'EPSG:4978'

@@ -1,37 +1,42 @@
 """
 4 Parameter Logistic Regression
 """
+from itertools import islice, accumulate
+
 import numpy as np
 from scipy.optimize import minimize, Bounds
 from scipy.special import expit
-from itertools import islice,accumulate
+
 
 class FourParamLogisticRegression:
     """ 4 Paramater Logistic Regression Model as described in:
-        https://www.statforbiology.com/nonlinearregression/usefulequations#logistic_curve
+    https://www.statforbiology.com/nonlinearregression/usefulequations#logistic_curve
     
     Fit through gradient descent either online (stochastically) or offline (L-BFGS-B)
     
+    P(x) = d + (a-d) / ( 1 + exp(b(x-c)))
+    4PL equation parameters;
+    a: float, asymptotic maximum 
+    b: float, gradient 
+    c: float, intercept
+    d: float, asymyptotic minimum 
+
+
     Parameters
     ----------
-
-    lr : float,  default = 1e-5, learning rate for SGD
-    batch_size: int, specifies the batch size for SGD: 1 for basic SGD, larger for mini-batch.
-
-    Attributes
-    ----------
-    4PL equation parameters;
-        a: float, asymptotic maximum 
-        b: float, gradient 
-        c: float, intercept
-        d: float, asymyptotic minimum 
-
+    lr : array-like, optional
+        learning rate for SGD, by default [1e-6,1e-3,1e-3,1e-6]
+    batch_size : int, optional
+        specifies the batch size for SGD: 1 for basic SGD, larger for mini-batch., by default 100
+    initial_param : list, optional
+        starting parameters [a,b,c,d] for the model, by default [0.95, 1, 0, 0.05] 
     """
-    def __init__(self, lr=np.array([1e-6,1e-3,1e-3,1e-6]),batch_size=100,initial_param=[0.95, 1, 0, 0.05]):
+
+    def __init__(self, lr:np.array=[1e-6,1e-3,1e-3,1e-6],batch_size=100,initial_param=[0.8, 0.1, 20, 0.2]):
         self.lr = lr
         self.batch_size = batch_size
         self.param = np.array(initial_param)
-        # Initial parameters
+
         
 
     def _four_param_sigmoid(self,z:np.array)->np.array:
@@ -85,8 +90,7 @@ class FourParamLogisticRegression:
         for pos in range(0,xhat.shape[0],self.batch_size):
             self._batch_update(xhat[pos:pos+self.batch_size],ytrue[pos:pos+self.batch_size])
             param.append(self.param)
-        idx = np.floor(np.cumsum(valid)/self.batch_size).astype('int')
-        assert len(param)==np.max(idx)+1, "there is a problem in cross referencing the indices of parameter updates"
+        idx = np.floor(np.cumsum(valid) / self.batch_size).astype('int')
         param_repeated =[param[i] for i in idx]  #this is surprisngly slow - takes as long as all batchs update. 
         param_repeated[-1]=param[-1] #takes into account the short last update
         return param_repeated
@@ -115,35 +119,35 @@ class FourParamLogisticRegression:
         theta_0 = self.param
         param=[self.param for _ in range(X.shape[0])]
 
-        # def neg_log_likelihood(theta, X, y):
-        #     m = X.shape[0]
-        #     denom_ = 1 + np.exp( - theta[1] * (X - theta[2]) )
-        #     yhat = theta[3] + (theta[0] - theta[3])/denom_
-        #     return -(1 / m) * np.sum(y*np.log(yhat) + (1 - y)*np.log(1 - yhat))
-
-        # def optimize_theta(theta, X, y):
-        #     bounds = Bounds([0.5+1e-3, 1e-3, 0, 0], [1, 100, 1000, 0.5-1e-3])
-        #     opt_weights = minimize(neg_log_likelihood, theta, method='L-BFGS-B',bounds=bounds, args=(X, y.flatten()))
-        #     # opt_weights = minimize(neg_log_likelihood, theta, method='Nelder-Mead', args=(X, y.flatten()))
-
-        #     return opt_weights.x
-
-        def neg_log_likelihood_weighted(theta_, X, y):
-            theta=np.multiply(theta_,np.array([1,100,1000,1]))
+        def neg_log_likelihood(theta, X, y):
             m = X.shape[0]
-            yhat = theta[3] + (theta[0] - theta[3]) *expit(theta[1] * (X - theta[2]) )
+            denom_ = 1 + np.exp( - theta[1] * (X - theta[2]) )
+            yhat = theta[3] + (theta[0] - theta[3])/denom_
             return -(1 / m) * np.sum(y*np.log(yhat) + (1 - y)*np.log(1 - yhat))
 
-        def optimize_theta_weighted(theta_, X, y):
-            bounds = Bounds([0.5+1e-3, 1e-3, 0, 0], [1, 1, 1, 0.5-1e-3])
-            theta=np.divide(theta_,np.array([1,100,1000,1]))
-            opt_weights = minimize(neg_log_likelihood_weighted, theta, method='L-BFGS-B',bounds=bounds, args=(X, y.flatten()),options={'iprint':-1,'gtol':1e-7})
+        def optimize_theta(theta, X, y):
+            bounds = Bounds([0.5+1e-3, 1e-3, 0, 0], [1, 100, 1000, 0.5-1e-3])
+            opt_weights = minimize(neg_log_likelihood, theta, method='L-BFGS-B',bounds=bounds, args=(X, y.flatten()))
             # opt_weights = minimize(neg_log_likelihood, theta, method='Nelder-Mead', args=(X, y.flatten()))
 
-            return np.multiply(opt_weights.x,np.array([1,100,1000,1]))
+            return opt_weights.x
+
+        # def neg_log_likelihood_weighted(theta_, X, y):
+        #     theta=np.multiply(theta_,np.array([1,100,1000,1]))
+        #     m = X.shape[0]
+        #     yhat = theta[3] + (theta[0] - theta[3]) *expit(theta[1] * (X - theta[2]) )
+        #     return -(1 / m) * np.sum(y*np.log(yhat) + (1 - y)*np.log(1 - yhat))
+
+        # def optimize_theta_weighted(theta_, X, y):
+        #     bounds = Bounds([0.5+1e-3, 1e-5, 0, 0], [1, 1, 1, 0.5-1e-3])
+        #     theta=np.divide(theta_,np.array([1,100,1000,1]))
+        #     opt_weights = minimize(neg_log_likelihood_weighted, theta, method='L-BFGS-B',bounds=bounds, args=(X, y.flatten()),options={'iprint':-1,'gtol':1e-7})
+        #     # opt_weights = minimize(neg_log_likelihood, theta, method='Nelder-Mead', args=(X, y.flatten()))
+
+        #     return np.multiply(opt_weights.x,np.array([1,100,1000,1]))
 
 
-        self.param = optimize_theta_weighted(theta_0, X_, Y_)
+        self.param = optimize_theta(theta_0, X_, Y_)
         param[-1]=self.param
         return param
 
