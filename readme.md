@@ -18,7 +18,8 @@ It does not include any functionality for processing GNSS data in order to estim
 -------
 GnssMapper depends on the GeoPandas package (and underlying dependencies for pandas, shapely, fiona, and pyproj). It also depends on pygeos to speed up vectorised geometry operations. We recommend following the Geopandas instructions for installing these packages.
 
-GnssMapper runs on Python 3.6 and above. GnssMapper has only been tested with the following setup:  
+GnssMapper has only been tested with the following setup:  
+Python     : 3.9.1
 GEOS       : 3.9.0  
 GDAL       : 3.2.1  
 PROJ       : 7.2.1  

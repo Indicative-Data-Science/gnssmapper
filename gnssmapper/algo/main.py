@@ -52,7 +52,7 @@ def fit_data(data:pd.DataFrame, **kwargs)->pd.DataFrame:
     index = [c for c in data.columns if c!='Cn0DbHz']
     params = [fit(height=data[i], ss=data['Cn0DbHz'], **kwargs)[-1,:,:] for i in index]
     heights = np.array([_heights(p) for p in params])
-    return pd.DataFrame(heights,index=index,columns=['lower_bound','mid_point','opper_bound'])
+    return pd.DataFrame(heights,index=index,columns=['lower_bound','mid_point','upper_bound'])
 
 def _heights(param):
     """ Converts model parameters into height bounds """
