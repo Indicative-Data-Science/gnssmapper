@@ -8,6 +8,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 from shapely.geometry import box, Point, Polygon
+from typing import Set
 
 # from scipy.stats import rice
 
@@ -53,7 +54,7 @@ def simulate(map_: gpd.GeoDataFrame, method:str, num_samples: int, start:pd.Time
     observations = simulate_observations(map_, points,set(['C','E','G','R']),**samplings_args)
     return observations
 
-def simulate_observations(map_: gpd.GeoDataFrame, points: gpd.GeoDataFrame,constellations: set[str] = set(['C','E','G','R']),**sampling_args) -> gpd.GeoDataFrame:
+def simulate_observations(map_: gpd.GeoDataFrame, points: gpd.GeoDataFrame,constellations: Set[str] = set(['C','E','G','R']),**sampling_args) -> gpd.GeoDataFrame:
     """Generates a simulated set of observations from a receiverpoints dataframe
 
     Parameters
@@ -152,9 +153,10 @@ def _xy_point_process(map_:gpd.GeoDataFrame,polygon:Polygon,num_samples:int) ->g
 
 
 def point_process(map_:gpd.GeoDataFrame, num_samples:int, start:pd.Timestamp,end:pd.Timestamp, polygon: Polygon = Polygon(), receiver_offset:float=1.0) -> gpd.GeoDataFrame:
-    """Generates a set of receiver locations using a random point process.
+    """ Generates a set of receiver locations using a random point process.
 
     Receiver locations are within the map boundaries and outside of buildings. 
+    
     Parameters
     ----------
     map_ : gpd.GeoDataFrame
@@ -174,6 +176,7 @@ def point_process(map_:gpd.GeoDataFrame, num_samples:int, start:pd.Timestamp,end
     -------
     gpd.GeoDataFrame
         Receiverpoints
+
     """
     cm.check.map(map_)
 

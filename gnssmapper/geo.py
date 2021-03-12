@@ -202,10 +202,11 @@ def projected_height(map_, rays:gpd.GeoSeries) -> pd.DataFrame:
 
 def drop_z(map_: gpd.GeoDataFrame):
     """Drops z attribute"""
-    if pygeos.has_z(map_.geometry).any():
+    output = map_.copy()
+    if pygeos.has_z(map_.geometry.array.data).any():
         warnings.warn("Geometry contains Z co-ordinates. Removed from Map3D (height attribute)")
-    map_.geometry = pygeos.apply(map_.geometry, lambda x: x, include_z=False)
-    return map_     
+        output.geometry = pygeos.apply(map_.geometry.array.data, lambda x: x, include_z=False)
+    return output     
 
 def is_inside(points, polygon):
     """  

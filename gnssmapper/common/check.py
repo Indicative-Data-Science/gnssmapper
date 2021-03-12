@@ -3,7 +3,7 @@
 Objects {rays, receiver_points, observations, maps} are special geoDataFrames.
 Not implemented as classes because of the difficulty of subclassing Pandas dataframes.
 """
-from typing import Union
+from typing import Union,Set
 import warnings
 
 
@@ -60,7 +60,7 @@ def observations(obs: gpd.GeoDataFrame) -> None:
     tests = {
         '"svid" column missing or not string':
             ('svid' not in obs.columns) or
-            ((obs['svid'].dtype !="object") and(obs['svid'].dtype !='StringDtype')),
+            ((obs['svid'].dtype !="object") and(obs['svid'].dtype !='string')),
         '"time" column missing or not datetime':
             ('time' not in obs.columns) or
             (obs['time'].dtype != "datetime64[ns]"),
@@ -99,7 +99,7 @@ def crs(crs_: pyproj.crs.CRS) -> None:
     return None
 
 
-def constellations(svid: Union[pd.Series,set[str]], expected: set[str]) -> None:
+def constellations(svid: Union[pd.Series,Set[str]], expected: Set[str]) -> None:
     if isinstance(svid, pd.Series):
         present = set(svid.str[0].unique())
     else:

@@ -1,0 +1,17 @@
+# Ignore build
+dist/
+build/
+gnssmapper.egg-info/
+
+# Ignore document build
+docs/_build/
+
+# Ensure any data in local copy of gnssmapper isn't copied
+gnssmapper/data/sp3/*
+gnssmapper/data/orbits/*
+!**/__init__.py
+
+# Ignore any additional example files
+examplefiles/*
+!examplefiles/gnss_log_2020_02_11_08_49_29.txt
+!examplefiles/pilot_study.geojson.zip

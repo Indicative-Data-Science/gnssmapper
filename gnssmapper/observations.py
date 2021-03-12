@@ -7,12 +7,13 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 
+from typing import Set
 import gnssmapper.common as cm
 from gnssmapper.geo import rays, to_crs, z
 import gnssmapper.satellitedata as st
 
 
-def observe(points: gpd.GeoDataFrame, constellations: set[str] = set()) -> gpd.GeoDataFrame:
+def observe(points: gpd.GeoDataFrame, constellations: Set[str] = set()) -> gpd.GeoDataFrame:
     """Generates a set of observations from a receiverpoints dataframe.
 
     Observations includes all above horizon svids, not only those measured in receiverpoints dataframe.
@@ -35,6 +36,8 @@ def observe(points: gpd.GeoDataFrame, constellations: set[str] = set()) -> gpd.G
         time
         sv
         signal features
+    
+    
     """
     #preliminaries
     cm.check.receiverpoints(points)
@@ -79,7 +82,7 @@ def observe(points: gpd.GeoDataFrame, constellations: set[str] = set()) -> gpd.G
     return obs
 
 
-def _get_satellites(points: gpd.GeoDataFrame, constellations: set[str]) -> pd.DataFrame:
+def _get_satellites(points: gpd.GeoDataFrame, constellations: Set[str]) -> pd.DataFrame:
     """ Dataframe of all svids visible to a set of points """
     # cm.check.receiverpoints(points) 
     # Generate dataframe of all svids supported by receiver

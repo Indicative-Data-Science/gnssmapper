@@ -206,7 +206,7 @@ def _create_orbit(sp3_df: pd.DataFrame) -> dict:
     return polyXYZ
 
 
-def _poly_lagrange(i: int, alldata: pd.DataFrame) -> list[float, dict]:
+def _poly_lagrange(i: int, alldata: pd.DataFrame) -> list:
     """Returns lagrangian polynomial coefficients, along with scaling parameters used to avoid problems with numerically small coeffecients.
 
     Parameters
