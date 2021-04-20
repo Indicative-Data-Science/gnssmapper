@@ -1,4 +1,6 @@
 # Ignore build
+dist
+build
 dist/
 build/
 gnssmapper.egg-info/

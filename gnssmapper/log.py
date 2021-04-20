@@ -94,16 +94,38 @@ def read_csv_(filepath: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
             " ", "") for line in f if "raw" in line.lower())
         gnss_raw = pd.read_csv(
             StringIO("\n".join(raw))
-            ).convert_dtypes()
+            ).convert_dtypes(convert_string=False,
+                convert_integer=True,
+                convert_boolean=False,
+                convert_floating=False)
+
 
     with open(filepath, 'r') as f:
         fix = (line.split(",", maxsplit=1)[1].replace(
             " ", "") for line in f if "fix" in line.lower())
         gnss_fix = pd.read_csv(
             StringIO("\n".join(fix))
-            ).convert_dtypes()
+            ).convert_dtypes(convert_string=False,
+                convert_integer=True,
+                convert_boolean=False,
+                convert_floating=False)
 
     return (gnss_raw, gnss_fix)
+
+
+# def _convert_dtypes_raw(df: pd.DataFrame) –> pd.DataFrame:
+#     """ Forces nanosecond datatypes as int, to avoid floating point errors when calcuating pseudorange."""
+#     out = df.copy()
+#     out['TimeNanos'] = out['TimeNanos'].astype('Int64')
+#     out['FullBiasNanos'] = out['FullBiasNanos'].astype('Int64')
+#     out['TimeNanos']=gnss_raw['TimeNanos'].astype('Int64')
+    
+#     out['TimeNanos']=df['TimeNanos'].astype() - gnss_raw['FullBiasNanos']
+
+#     # compute transmission time (nanos since gps epoch)
+#     # ReceivedSvTimeNanos (time since start of gnss period)
+#     # + gps time of start of gnss period
+#     tx = (gnss_raw['ReceivedSvTimeNanos']
 
 
 def _compare_version(actual: str, expected: str) -> bool:
@@ -148,8 +170,8 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
     """
     # reformat svid to standard (IGS) format
     constellation = gnss_raw['ConstellationType'].map(
-        cm.constants.constellation_numbering).convert_dtypes()
-    svid_string = gnss_raw['Svid'].astype("string").str.pad(2, fillchar='0').convert_dtypes()
+        cm.constants.constellation_numbering)
+    svid_string = gnss_raw['Svid'].astype("string").str.pad(2, fillchar='0')
     svid = constellation.str.cat(svid_string)
 
     # compute receiver time (nanos since gps epoch)
@@ -219,13 +241,18 @@ def join_receiver_position(
         gnss_fix: pd.DataFrame) -> gpd.GeoDataFrame:
     """  Add receiver positions to Raw data.
 
-    Joined by utc time in milliseconds.
+    Joined by utc time (within a 1 second tolerance).
     """
-    clean_fix = gnss_fix[["Longitude","Latitude","Altitude","(UTC)TimeInMs"]].dropna().set_index("(UTC)TimeInMs")
-    df = gnss_obs.join(clean_fix,
-                       on="time_ms", how="inner", lsuffix="obs", rsuffix="fix")
+    clean_fix = gnss_fix[["Longitude", "Latitude", "Altitude", "(UTC)TimeInMs"]].dropna().sort_values("(UTC)TimeInMs")
+    # Converting utc type to int64 (fine because NA's have been dropped). This is due to a merge_asof bug with Int64.
+    clean_fix["(UTC)TimeInMs"]= clean_fix["(UTC)TimeInMs"].astype('int64')
+    clean_obs = gnss_obs.dropna(subset=["time_ms"]).sort_values("time_ms")
+    clean_obs["time_ms"] = clean_obs["time_ms"].astype('int64')
+    df = pd.merge_asof(clean_obs, clean_fix, left_on="time_ms", right_on="(UTC)TimeInMs", suffixes=["obs", "fix"], tolerance=cm.constants.join_tolerance_ms, direction='nearest')
+    df.dropna(subset=["(UTC)TimeInMs"],inplace=True)
     df.reset_index(drop=True, inplace = True)
-    df
+    df.drop(columns=["(UTC)TimeInMs","time_ms"],inplace = True)
+
     if len(df) != len(gnss_obs):
         warnings.warn(
             f'{len(gnss_obs)-len(df)} observations discarded without matching fix.'
@@ -238,3 +265,4 @@ def join_receiver_position(
                                     df["Altitude"]),
         crs=cm.constants.epsg_gnss_logger)
     return gdf
+

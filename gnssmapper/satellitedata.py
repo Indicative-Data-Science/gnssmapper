@@ -12,13 +12,13 @@ import os
 import re
 import urllib.request
 import warnings
-import zlib
 
 
 import numpy as np
 from numpy.polynomial import polynomial as P
 import pandas as pd
 from scipy.interpolate import lagrange
+import unlzw3
 
 import gnssmapper.common as cm
 import gnssmapper.data as data
@@ -160,7 +160,15 @@ class SatelliteData:
         for day in missing_days:
             orbit_dic = defaultdict(dict)
             print(f"downloading sp3 file for {day}.")
-            sp3 = _get_sp3_file(day)
+            try:
+                sp3 = _get_sp3_file(day,'final')
+            except:
+                warnings.warn("final SP3 file not available, using rapid")
+                try:
+                    sp3 = _get_sp3_file(day, 'rapid')
+                except:
+                    warnings.warn("rapid SP3 file not available, using ultra (GPS + GLONASS only)")
+                    sp3 = _get_sp3_file(day,'ultra')
             df = _get_sp3_dataframe(sp3)
             print(f"creating {day} orbit.")
             unsorted_orbit = _create_orbit(df)
@@ -252,7 +260,7 @@ def _get_sp3_file(date: str, orbit_type='final') -> str:
     date : str
         date in YYYYdoy format
     orbit_type : str, optional
-        type of precise orbit product {final, rapid}, by default 'final'
+        type of precise orbit product {final, rapid, ultra}, by default 'final'
 
     Returns
     -------
@@ -263,9 +271,10 @@ def _get_sp3_file(date: str, orbit_type='final') -> str:
     
 
     filename = _sp3_filename[orbit_type](date)
-    filename
+    datasite = _sp3_datasite[orbit_type]
+
     if not importlib.resources.is_resource(data.sp3, filename):
-        url = _sp3_datasite + _sp3_filepath(date) + filename
+        url = datasite + _sp3_filepath(date) + filename
         local_path = data.sp3.__path__[0]+'/'+filename
         urllib.request.urlretrieve(url, local_path)
         
@@ -275,7 +284,7 @@ def _get_sp3_file(date: str, orbit_type='final') -> str:
     if extension == 'gz':
         binary = gzip.decompress(zipfile)
     else:
-        binary = zlib.decompress | (zipfile)
+        binary = unlzw3.unlzw(zipfile)
     txt = binary.decode('utf-8')
 
     return txt
@@ -342,13 +351,19 @@ def _get_sp3_dataframe(sp3: str) -> pd.DataFrame:
 
 """ SP3 download related functions """
 
-_sp3_datasite = "http://navigation-office.esa.int/products/gnss-products/"
+_sp3_datasite = {
+    'ultra': "http://navigation-office.esa.int/products/gnss-products/",
+    'rapid': "ftp://ftp.gfz-potsdam.de/GNSS/products/mgnss/",
+    'final': "http://navigation-office.esa.int/products/gnss-products/"
+    }
 def _sp3_filepath(date):
     return str(_sp3_filename_date_conversion(date)['week'][0])+'/'
 
 _sp3_filename = {
-    'rapid': lambda x: 'esu' + str(_sp3_filename_date_conversion(x)['week'][0]) + str(_sp3_filename_date_conversion(x)['day'][0]) + '_00.sp3.Z',
-    'final': lambda x: 'ESA0MGNFIN_' + x + '0000_01D_05M_ORB.SP3.gz'}
+    'ultra': lambda x: 'esu' + str(_sp3_filename_date_conversion(x)['week'][0]) + str(_sp3_filename_date_conversion(x)['day'][0]) + '_00.sp3.Z',
+    'rapid': lambda x: 'GBM0MGXRAP_'+ x + '0000_01D_05M_ORB.SP3.gz',
+    'final': lambda x: 'ESA0MGNFIN_' + x + '0000_01D_05M_ORB.SP3.gz'
+    }
 
 def _sp3_filename_date_conversion(date):
     """ Converts a doy format to gps week  """

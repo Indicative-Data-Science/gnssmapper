@@ -163,7 +163,7 @@ class TestNA(unittest.TestCase):
         raw_var, gnss_fix = log.read_csv_(self.filepath)
         gnss_obs = log.process_raw(raw_var)
         self.assertWarnsRegex(UserWarning,
-                              '37 observations discarded without matching fix.',log.join_receiver_position,
+                              '2 observations discarded without matching fix.',log.join_receiver_position,
             gnss_obs, gnss_fix)
 
 class TestJoinReceiverPosition(unittest.TestCase):

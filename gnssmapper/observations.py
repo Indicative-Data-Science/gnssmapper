@@ -53,26 +53,9 @@ def observe(points: gpd.GeoDataFrame, constellations: Set[str] = set()) -> gpd.G
             constellations = measured_constellations
 
     sats = _get_satellites(points,constellations)
-    
-
-    # convert points into geocentric WGS and merge
-    receiver = to_crs(points, cm.constants.epsg_satellites)
-    location = receiver[['time']].assign(
-        x=receiver.geometry.x, y=receiver.geometry.y, z=z(receiver.geometry)).drop_duplicates()
-    obs = location.merge(sats, how='right',on=['time'])
-
-    #add measurements if any taken
-    if 'svid' in receiver.columns:
-        measurement = receiver.drop(columns=['geometry'])
-        obs= obs.merge(measurement, how = 'left',on=['svid','time'])
-    
-    r = obs.loc[:, ["x", "y", "z"]].to_numpy().tolist()
-    s = obs.loc[:, ["sv_x", "sv_y", "sv_z"]].to_numpy().tolist()
-    lines = rays(r, s)
-
-    obs = obs.drop(columns=['x', 'y', 'z', 'sv_x', 'sv_y', 'sv_z'])
-    obs = gpd.GeoDataFrame(obs, crs=cm.constants.epsg_satellites, geometry=lines)
-    cm.check.observations(obs)
+    #convert GLONASS FCN codes
+    points_osn = _convert_fcn(points)
+    obs = _merge(points_osn,sats)
     
     # filter observations
     obs = filter_elevation(obs, cm.constants.minimum_elevation,
@@ -89,7 +72,8 @@ def _get_satellites(points: gpd.GeoDataFrame, constellations: Set[str]) -> pd.Da
     gps_time = cm.time.utc_to_gps(points['time'].drop_duplicates())
     sd = st.SatelliteData()
     svids = sd.name_satellites(gps_time).explode()
-    svids = svids[svids.str[0].isin(constellations)]    
+    valid_svids = set().union(*[cm.constants.supported_svids[c] for c in constellations])
+    svids = svids[svids.isin(valid_svids)]    
     svids = svids.dropna().rename_axis('gps_time').reset_index()
 
     # locate the satellites
@@ -99,6 +83,41 @@ def _get_satellites(points: gpd.GeoDataFrame, constellations: Set[str]) -> pd.Da
     sats['time'] = cm.time.gps_to_utc(sats['gps_time'])
     sats.drop(columns=['gps_time'],inplace=True)
     return sats
+
+def _convert_fcn(points: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    #convert GLONASS satellites with a FCN code to Orbital Slot numbers (Elevation must be used to filter out duplicates)
+    def is_fcn(x):
+        return (x.str[0] == 'R') & (x.str[1:].astype('int') >= 93)
+    points_=points.copy()
+    fcn = points_.loc[is_fcn(points['svid']),]    
+    osn1 = fcn.copy()
+    osn1['svid'] = fcn['svid'].map(cm.constants.fcn_to_osn).map(lambda x: x[1])
+    points_.loc[is_fcn(points['svid']),'svid'] = fcn['svid'].map(cm.constants.fcn_to_osn).map(lambda x: x[0])
+    return(pd.concat([points_,osn1], ignore_index=True))
+
+def _merge(points: gpd.GeoDataFrame, sats: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    
+    # convert points into geocentric WGS and merge
+    receiver = to_crs(points, cm.constants.epsg_satellites)
+    receiver = receiver.assign(
+        x=receiver.geometry.x, y=receiver.geometry.y, z=z(receiver.geometry))
+    location = receiver[['time','x','y','z']].drop_duplicates()
+    obs = location.merge(sats, how='right',on=['time'])
+
+    #add measurements if any taken
+    if 'svid' in receiver.columns:
+        measurement = receiver.drop(columns=['geometry'])
+        obs= obs.merge(measurement, how = 'left',on=['x','y','z','svid','time'])
+    
+    r = obs.loc[:, ["x", "y", "z"]].to_numpy().tolist()
+    s = obs.loc[:, ["sv_x", "sv_y", "sv_z"]].to_numpy().tolist()
+    lines = rays(r, s)
+
+    obs = obs.drop(columns=['x', 'y', 'z', 'sv_x', 'sv_y', 'sv_z'])
+    obs = gpd.GeoDataFrame(obs, crs=cm.constants.epsg_satellites, geometry=lines)
+    return obs
+
+
 
 def filter_elevation(observations: gpd.GeoDataFrame, lb: float, ub: float) -> gpd.GeoDataFrame:
     """Filters observations by elevation bounds.
