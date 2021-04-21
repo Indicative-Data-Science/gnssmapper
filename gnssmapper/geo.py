@@ -23,6 +23,8 @@ from shapely.wkt import loads
 
 import gnssmapper.common as cm
 
+
+
 def z(points: gpd.GeoSeries) -> pd.Series:
     """Returns Z coordinate for a set of point geometries """
     return pd.Series((point.z for point in points),index=points.index)    
@@ -84,7 +86,7 @@ def map_to_crs(map_: gpd.GeoDataFrame, target: pyproj.crs.CRS) -> gpd.GeoDataFra
     gpd.GeoDataFrame
         transformed map
     """    
-    cm.check.map(map_)
+    cm.check.check_type(map_,'map',raise_errors=True)
     transformed = to_crs(map_, target)
 
     xy = map_.geometry.centroid
@@ -145,7 +147,7 @@ def is_los(map_, rays:gpd.GeoSeries) -> pd.Series:
     pd.Series
         true if ray has a clear line of sight.
     """   
-    cm.check.rays(rays)
+    cm.check.check_type(rays,'rays',raise_errors=True)
     
     los = np.ones((len(rays),), dtype=bool)
     

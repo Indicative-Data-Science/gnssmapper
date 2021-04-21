@@ -11,8 +11,9 @@ import numpy as np
 import pandas as pd
 
 import gnssmapper.common as cm
+from gnssmapper.common.check import ReceiverPoints
 
-def read_gnsslogger(filepath: str) -> gpd.GeoDataFrame:
+def read_gnsslogger(filepath: str) -> ReceiverPoints:
     """Process a log file and returns a set of gnss receiverpoints.
 
     Parameters
@@ -36,7 +37,7 @@ def read_gnsslogger(filepath: str) -> gpd.GeoDataFrame:
     points = join_receiver_position(
         gnss_obs, gnss_fix)
 
-    cm.check.receiverpoints(points)
+    cm.check.check_type(points,'receiverpoints',raise_errors=True)
     return points
 
 
@@ -238,10 +239,10 @@ def period_start_time(rx: pd.Series, state: pd.Series, constellation: pd.Series)
 
 def join_receiver_position(
         gnss_obs: pd.DataFrame,
-        gnss_fix: pd.DataFrame) -> gpd.GeoDataFrame:
+        gnss_fix: pd.DataFrame) -> ReceiverPoints:
     """  Add receiver positions to Raw data.
 
-    Joined by utc time (within a 1 second tolerance).
+    Joined by utc time.
     """
     clean_fix = gnss_fix[["Longitude", "Latitude", "Altitude", "(UTC)TimeInMs"]].dropna().sort_values("(UTC)TimeInMs")
     # Converting utc type to int64 (fine because NA's have been dropped). This is due to a merge_asof bug with Int64.

@@ -59,7 +59,7 @@ required_states = {
 epsg_gnss_logger = 'EPSG:4979'
 
 # tolerance when joining observations to receiver locations
-join_tolerance_ms =990
+join_tolerance_ms = 990
 
 
 """ GLONASS FCN to OSN conversion """

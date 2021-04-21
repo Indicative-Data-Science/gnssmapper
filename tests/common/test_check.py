@@ -38,18 +38,18 @@ class TestCheck(unittest.TestCase):
         self.assertWarnsRegex(UserWarning,'Includes unsupported constellations:',check.constellations,valid_receiverpoints.svid,part)
 
     def test_rays(self) -> None:
-        self.assertIsNone(check.rays(self.rays))
+        self.assertTrue(check.check_type(self.rays,'rays'))
     
     def test_obs(self) -> None:
         valid_obs = gpd.GeoDataFrame(self.d, geometry=self.rays)
-        self.assertIsNone(check.observations(valid_obs))
+        self.assertTrue(check.check_type(valid_obs,'observations'))
 
     def test_receiverpoints(self) -> None:
         valid_receiverpoints = gpd.GeoDataFrame(self.d, geometry = self.points)
-        self.assertIsNone(check.receiverpoints(valid_receiverpoints))
+        self.assertTrue(check.check_type(valid_receiverpoints,'receiverpoints'))
 
     def test_map(self) -> None:
         valid_map = gpd.GeoDataFrame({'height': [10]},
             geometry=[shapely.wkt.loads("POLYGON((528010 183010, 528010 183000,528000 183000, 528000 183010,528010 183010))")],
             crs="epsg:27700")
-        self.assertIsNone(check.map(valid_map))
+        self.assertTrue(check.check_type(valid_map,'map',True))

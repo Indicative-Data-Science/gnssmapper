@@ -119,7 +119,7 @@ class TestMapMethods(unittest.TestCase):
 
     def test_map_to_crs(self):
         output = geo.map_to_crs(self.map_box, cm.constants.epsg_wgs84)
-        cm.check.map(output)
+        cm.check.check_type(output,'map',raise_errors=True)
         same = geo.map_to_crs(self.map_box, "epsg:27700")
         pdt.assert_frame_equal(self.map_box,same,check_dtype=False)
         

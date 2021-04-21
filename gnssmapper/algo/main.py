@@ -13,11 +13,12 @@ import pandas as pd
 
 from gnssmapper.algo.FPL import FourParamLogisticRegression as fpl
 import gnssmapper.common as cm
+from gnssmapper.common.check import Map, Observations
 from gnssmapper.geo import projected_height
 
 
 
-def predict(map_: gpd.GeoDataFrame, obs: gpd.GeoDataFrame,**kwargs) -> pd.DataFrame:
+def predict(map_: Map, obs: Observations,**kwargs) -> pd.DataFrame:
     """Predicts heights for each map object based on a set of observations. 
 
 
@@ -33,13 +34,13 @@ def predict(map_: gpd.GeoDataFrame, obs: gpd.GeoDataFrame,**kwargs) -> pd.DataFr
     pd.DataFrame
         height of each map object
     """    
-    cm.check.map(map_)
-    cm.check.observations(obs)
+    cm.check.check_type(map_,'map',raise_errors=True)
+    cm.check.check_type(obs,'observations',raise_errors=True)
 
     data = prepare_data(map_, obs)
     return fit_data(data, **kwargs)
 
-def prepare_data(map_: gpd.GeoDataFrame, obs: gpd.GeoDataFrame) -> pd.DataFrame:
+def prepare_data(map_: Map, obs: Observations) -> pd.DataFrame:
     """ Returns a dataframe of intersection heights and signal features.
     
     Row indexed using observation index, whereas columns refer to map index."""    

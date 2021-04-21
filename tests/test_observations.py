@@ -19,7 +19,7 @@ class TestObservations(unittest.TestCase):
     def setUp(self) -> None:
         points = pd.DataFrame({'x': [527995], 'y': [183005], 'z':[0], 'time': [np.datetime64('2020-02-11T00:59:42', 'ns')]})
         self.points = gpd.GeoDataFrame(points, crs='EPSG:27700',geometry=gpd.points_from_xy(points['x'],points['y'],points['z']))
-        cm.check.receiverpoints(self.points)
+        cm.check.check_type(self.points,'receiverpoints',raise_errors=True)
 
     def test_get_satellites(self) -> None:
         obs = observations._get_satellites(self.points, set(["C", "E", "G", "R"]))

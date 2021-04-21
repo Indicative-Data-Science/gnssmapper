@@ -3,6 +3,7 @@
 Objects {rays, receiver_points, observations, maps} are special geoDataFrames.
 Not implemented as classes because of the difficulty of subclassing Pandas dataframes.
 """
+from typing import NewType
 from typing import Union,Set
 import warnings
 
@@ -15,74 +16,106 @@ import pyproj.crs
 
 from gnssmapper.common.constants import supported_constellations
 
-def rays(rays: gpd.GeoSeries) -> None:
-    # errors
-    tests = {
-        'Missing geometries': rays.is_empty.any(),
-        'Expecting Linestrings': not rays.geom_type.eq("LineString").all(),
-        'Missing z coordinates': not pygeos.has_z(
-            pygeos.io.from_shapely(rays)
-            ).all(),
-        'More than 2 points in Linestring': np.not_equal(
-            pygeos.count_coordinates(
-                pygeos.io.from_shapely(rays)),
-            2 * len(rays)).any(),
+Rays = NewType('Rays', gpd.GeoSeries)
+ReceiverPoints = NewType('ReceiverPoints', gpd.GeoDataFrame)
+Observations = NewType('Observations', gpd.GeoDataFrame)
+Map = NewType('Map', gpd.GeoDataFrame)
+
+
+def _rays(obj: Rays) -> dict:
+    if not isinstance(obj,gpd.GeoSeries):
+        return {'Not a GeoSeries': True}
+    else:
+        return {
+            'Missing geometries': obj.is_empty.any(),
+            'Expecting Linestrings': not obj.geom_type.eq("LineString").all(),
+            'Missing z coordinates': not obj.has_z.all(),
+            'More than 2 points in Linestring': np.not_equal(
+                pygeos.count_coordinates(
+                    pygeos.io.from_shapely(obj)),
+                2 * len(obj)).any(),
+        }
+
+def _receiverpoints(obj: ReceiverPoints) -> dict:
+    if not isinstance(obj,gpd.GeoDataFrame):
+        return {'Not a GeoDataFrame': True}
+    else:
+        return {
+            'Missing geometries': obj.geometry.is_empty.any(),
+            'Expecting obj': not obj.geom_type.eq("Point").all(),
+            'Missing z coordinates': not obj.has_z.all(),
+            '"time" column missing or not datetime':
+                (('time' not in obj.columns) or
+                (obj['time'].dtype != "datetime64[ns]")),
+        }
+
+
+def _observations(obj: Observations) -> dict:
+    if not isinstance(obj,gpd.GeoDataFrame):
+        return {'Not a GeoDataFrame': True}
+    else:
+        tests = _rays(obj.geometry)
+        tests.update(
+            {
+                '"svid" column missing or not string':
+                    ('svid' not in obj.columns) or
+                    ((obj['svid'].dtype !="object") and(obj['svid'].dtype !='string')),
+                '"time" column missing or not datetime':
+                    ('time' not in obj.columns) or
+                    (obj['time'].dtype != "datetime64[ns]"),
+            }
+        )
+        return tests
+
+
+def _map(obj: Map) -> dict:
+    if not isinstance(obj,gpd.GeoDataFrame):
+        return {'Not a GeoDataFrame': True}
+    else:
+        return {
+            'Missing geometries': obj.geometry.is_empty.any(),
+            'Expecting Polygons': not obj.geom_type.eq("Polygon").all(),
+            'Unexpected z coordinates':  obj.has_z.any(),
+                '"height" column missing or not numeric':
+                ('height' not in obj.columns) or
+                (obj['height'].dtype != "float" and obj['height'].dtype != "int"),   
+        }
+
+
+
+_check_dispatcher = {
+        'rays': _rays,
+        'receiverpoints': _receiverpoints,
+        'observations': _observations,
+        'map': _map
     }
-    _raise(tests)
-    return None
 
+def check_type(obj, object_type: str = None, raise_errors: bool = False) -> Union[str,bool]:    
+    if object_type:
+        try:
+            test_results = _check_dispatcher[object_type](obj)
+        except KeyError:
+            raise ValueError('Invalid object_type specified')    
+        if raise_errors:
+            _raise(test_results)
+        return not any(test_results.values())
+        
+    else:
+        return _infer_type(obj)
 
-def receiverpoints(points: gpd.GeoDataFrame) -> None:
-    # warnings
-    if 'svid' in points.columns:
-        constellations(
-            points['svid'], supported_constellations)
-    # errors
-    tests = {
-        'Missing geometries': points.geometry.is_empty.any(),
-        'Expecting Points': not points.geom_type.eq("Point").all(),
-        'Missing z coordinates': not pygeos.has_z(
-            pygeos.io.from_shapely(points.geometry)
-            ).all(),
-        '"time" column missing or not datetime':
-            (('time' not in points.columns) or
-            (points['time'].dtype != "datetime64[ns]")),
-    }
-    _raise(tests)
-    return None
+def _infer_type(obj) -> str:
+    if not isinstance(obj,gpd.GeoSeries):
+        return 'rays' if check_type(obj,'rays') else None
+    
+    if isinstance(obj,gpd.GeoDataFrame):
+        if obj[0,].geomtype == "Point":
+            return 'receiverpoints' if check_type(obj,'receiverpoints') else None
+        if obj[0,].geomtype == "LineString":
+            return 'observations' if check_type(obj,'observations') else None
+        if obj[0,].geomtype == "Polygon":
+            return 'map_' if check_type(obj,'map_') else None
 
-
-def observations(obs: gpd.GeoDataFrame) -> None:
-    if 'svid' in obs.columns:
-        constellations(obs['svid'], supported_constellations)
-    rays(obs.geometry)
-    # errors
-    tests = {
-        '"svid" column missing or not string':
-            ('svid' not in obs.columns) or
-            ((obs['svid'].dtype !="object") and(obs['svid'].dtype !='string')),
-        '"time" column missing or not datetime':
-            ('time' not in obs.columns) or
-            (obs['time'].dtype != "datetime64[ns]"),
-    }
-    _raise(tests)
-    return None
-
-
-def map(map_: gpd.GeoDataFrame) -> None:
-
-    tests = {
-        'Missing geometries': map_.geometry.is_empty.any(),
-        'Expecting Polygons': not map_.geom_type.eq("Polygon").all(),
-        'Unexpected z coordinates':  pygeos.has_z(
-            pygeos.io.from_shapely(map_.geometry)
-            ).any(),
-            '"height" column missing or not numeric':
-            ('height' not in map_.columns) or
-            (map_['height'].dtype != "float" and map_['height'].dtype != "int"),   
-    }
-    _raise(tests)
-    return None
+    return None 
 
 def _raise(tests: dict) -> None:
     errors = [k for k, v in tests.items() if v]
@@ -90,6 +123,7 @@ def _raise(tests: dict) -> None:
         text = ', '.join(errors)
         raise AttributeError(text)
     return None
+
 
 
 def crs(crs_: pyproj.crs.CRS) -> None:

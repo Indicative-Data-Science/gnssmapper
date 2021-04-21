@@ -22,13 +22,13 @@ class TestReadCSV(unittest.TestCase):
             'Svid': [2],
             'ConstellationType': [1],
             'State': [16431],
-            'Cn0DbHz': [22.340620040893555]}).convert_dtypes()
+            'Cn0DbHz': [22.340620040893555]}).convert_dtypes(convert_floating=False,convert_boolean=False,convert_string=False)
         fix_expected = pd.DataFrame({
             'Latitude': [51.524707],
             'Longitude': [-0.134140],
             'Altitude': [114.858938],
             '(UTC)TimeInMs': [1581410967999]
-        }).convert_dtypes()
+        }).convert_dtypes(convert_floating=False,convert_boolean=False,convert_string=False)
         pt.assert_frame_equal(
             raw_var.loc[0:0, ['TimeNanos','FullBiasNanos','Svid', 'ConstellationType','State','Cn0DbHz']],
             raw_expected)
@@ -106,8 +106,8 @@ class TestProcessRaw(unittest.TestCase):
         output = log.process_raw(self.input)
         pt.assert_series_equal(
             output.svid,
-            pd.Series(["G01"], name='svid').convert_dtypes(),
-            check_names=False)
+            pd.Series(["G01"], name='svid'),
+            check_names=False,check_dtype=False)
 
     def test_rx(self) -> None:
         output = log.process_raw(self.input)
@@ -163,7 +163,7 @@ class TestNA(unittest.TestCase):
         raw_var, gnss_fix = log.read_csv_(self.filepath)
         gnss_obs = log.process_raw(raw_var)
         self.assertWarnsRegex(UserWarning,
-                              '2 observations discarded without matching fix.',log.join_receiver_position,
+                              '37 observations discarded without matching fix.',log.join_receiver_position,
             gnss_obs, gnss_fix)
 
 class TestJoinReceiverPosition(unittest.TestCase):

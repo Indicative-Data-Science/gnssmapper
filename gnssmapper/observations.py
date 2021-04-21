@@ -11,16 +11,16 @@ from typing import Set
 import gnssmapper.common as cm
 from gnssmapper.geo import rays, to_crs, z
 import gnssmapper.satellitedata as st
+from gnssmapper.common.check import ReceiverPoints, Observations
 
-
-def observe(points: gpd.GeoDataFrame, constellations: Set[str] = set()) -> gpd.GeoDataFrame:
+def observe(points: ReceiverPoints, constellations: Set[str] = set()) -> Observations:
     """Generates a set of observations from a receiverpoints dataframe.
 
     Observations includes all above horizon svids, not only those measured in receiverpoints dataframe.
 
     Parameters
     ----------
-    points : gpd.GeoDataFrame
+    points : ReceiverPoints
         gnss receiverpoints including:
             receiver position (as point geometry)
             time (utc format)
@@ -30,7 +30,7 @@ def observe(points: gpd.GeoDataFrame, constellations: Set[str] = set()) -> gpd.G
 
     Returns
     -------
-    gpd.GeoDataFrame
+    Observations
         observations including:
         geometry (linestring from receiver in direction of satellite)
         time
@@ -40,7 +40,7 @@ def observe(points: gpd.GeoDataFrame, constellations: Set[str] = set()) -> gpd.G
     
     """
     #preliminaries
-    cm.check.receiverpoints(points)
+    cm.check.check_type(points,'receiverpoints',raise_errors=True)
     cm.check.constellations(constellations, cm.constants.supported_constellations)
     
     measured_constellations = set(points['svid'].str[0].unique()) if 'svid' in points.columns else set()
@@ -65,9 +65,9 @@ def observe(points: gpd.GeoDataFrame, constellations: Set[str] = set()) -> gpd.G
     return obs
 
 
-def _get_satellites(points: gpd.GeoDataFrame, constellations: Set[str]) -> pd.DataFrame:
+def _get_satellites(points: ReceiverPoints, constellations: Set[str]) -> pd.DataFrame:
     """ Dataframe of all svids visible to a set of points """
-    # cm.check.receiverpoints(points) 
+
     # Generate dataframe of all svids supported by receiver
     gps_time = cm.time.utc_to_gps(points['time'].drop_duplicates())
     sd = st.SatelliteData()
@@ -84,7 +84,7 @@ def _get_satellites(points: gpd.GeoDataFrame, constellations: Set[str]) -> pd.Da
     sats.drop(columns=['gps_time'],inplace=True)
     return sats
 
-def _convert_fcn(points: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def _convert_fcn(points:ReceiverPoints) -> ReceiverPoints:
     #convert GLONASS satellites with a FCN code to Orbital Slot numbers (Elevation must be used to filter out duplicates)
     def is_fcn(x):
         return (x.str[0] == 'R') & (x.str[1:].astype('int') >= 93)
@@ -95,7 +95,7 @@ def _convert_fcn(points: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     points_.loc[is_fcn(points['svid']),'svid'] = fcn['svid'].map(cm.constants.fcn_to_osn).map(lambda x: x[0])
     return(pd.concat([points_,osn1], ignore_index=True))
 
-def _merge(points: gpd.GeoDataFrame, sats: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def _merge(points: ReceiverPoints, sats: gpd.GeoDataFrame) -> Observations:
     
     # convert points into geocentric WGS and merge
     receiver = to_crs(points, cm.constants.epsg_satellites)
@@ -119,7 +119,7 @@ def _merge(points: gpd.GeoDataFrame, sats: gpd.GeoDataFrame) -> gpd.GeoDataFrame
 
 
 
-def filter_elevation(observations: gpd.GeoDataFrame, lb: float, ub: float) -> gpd.GeoDataFrame:
+def filter_elevation(observations: Observations, lb: float, ub: float) -> Observations:
     """Filters observations by elevation bounds.
 
     Parameters
@@ -145,9 +145,9 @@ def filter_elevation(observations: gpd.GeoDataFrame, lb: float, ub: float) -> gp
     return observations.loc[valid, :].copy()
 
 
-def elevation(lines: gpd.GeoSeries) -> np.array:
+def elevation(lines: rays) -> np.array:
     """ Returns elevation with respect to the wgs84 ellipsoid plane centred at the start of line. """
-    cm.check.rays(lines)
+    cm.check.check_type(lines,'rays',raise_errors=True)
     ecef = to_crs(lines,cm.constants.epsg_wgs84_cart)
     lla = to_crs(lines,cm.constants.epsg_wgs84)
 

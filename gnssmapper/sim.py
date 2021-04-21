@@ -14,16 +14,17 @@ from typing import Set
 
 import gnssmapper.common as cm
 from gnssmapper.observations import observe
+from gnssmapper.common.check import Observations, Map, ReceiverPoints
 from gnssmapper.geo import fresnel, to_crs, is_outside,ground_level
 
 _rng = np.random.default_rng()
 
-def simulate(map_: gpd.GeoDataFrame, method:str, num_samples: int, start:pd.Timestamp,end:pd.Timestamp,method_args:dict=dict(),samplings_args:dict=dict()) -> gpd.GeoDataFrame:
+def simulate(map_: Map, method:str, num_samples: int, start:pd.Timestamp,end:pd.Timestamp,method_args:dict=dict(),samplings_args:dict=dict()) -> Observations:
     """Simulates observations made by a receiver.
 
     Parameters
     ----------
-    map_ : gpd.GeoDataFrame
+    map_ : Map
         A map
     method : str
         process used to generate receiverpoints. Values are {'point_process','random_walk'}
@@ -54,7 +55,7 @@ def simulate(map_: gpd.GeoDataFrame, method:str, num_samples: int, start:pd.Time
     observations = simulate_observations(map_, points,set(['C','E','G','R']),**samplings_args)
     return observations
 
-def simulate_observations(map_: gpd.GeoDataFrame, points: gpd.GeoDataFrame,constellations: Set[str] = set(['C','E','G','R']),**sampling_args) -> gpd.GeoDataFrame:
+def simulate_observations(map_: Map, points: ReceiverPoints, constellations: Set[str] = set(['C','E','G','R']),**sampling_args) -> Observations:
     """Generates a simulated set of observations from a receiverpoints dataframe
 
     Parameters
@@ -83,7 +84,7 @@ def simulate_observations(map_: gpd.GeoDataFrame, points: gpd.GeoDataFrame,const
     observations = sample(observations,**sampling_args)
     return observations
 
-def sample(observations: gpd.GeoDataFrame,SSLB:float=10, mu_:float=35,msr_noise:float=5) -> gpd.GeoDataFrame:
+def sample(observations: Observations,SSLB:float=10, mu_:float=35,msr_noise:float=5) -> Observations:
     """Generates stochastic estimates of signal strength for an observations set.
     
     Utilises pre-calculated fresnel parameter.
@@ -136,7 +137,7 @@ def sample(observations: gpd.GeoDataFrame,SSLB:float=10, mu_:float=35,msr_noise:
     return obs.convert_dtypes()
 
 
-def _xy_point_process(map_:gpd.GeoDataFrame,polygon:Polygon,num_samples:int) ->gpd.GeoSeries:
+def _xy_point_process(map_:Map,polygon:Polygon,num_samples:int) ->gpd.GeoSeries:
     """ Generates a geoseries of (2d) points outside map_ buildings and inside polygon"""
     minx, miny, maxx, maxy = polygon.bounds
     xy = np.empty(shape=(0,2),dtype=float)
@@ -152,7 +153,7 @@ def _xy_point_process(map_:gpd.GeoDataFrame,polygon:Polygon,num_samples:int) ->g
     return gpd.GeoSeries(gpd.points_from_xy(xy[:,0],xy[:,1]),crs=map_.crs)
 
 
-def point_process(map_:gpd.GeoDataFrame, num_samples:int, start:pd.Timestamp,end:pd.Timestamp, polygon: Polygon = Polygon(), receiver_offset:float=1.0) -> gpd.GeoDataFrame:
+def point_process(map_:Map, num_samples:int, start:pd.Timestamp,end:pd.Timestamp, polygon: Polygon = Polygon(), receiver_offset:float=1.0) -> ReceiverPoints:
     """ Generates a set of receiver locations using a random point process.
 
     Receiver locations are within the map boundaries and outside of buildings. 
@@ -178,7 +179,7 @@ def point_process(map_:gpd.GeoDataFrame, num_samples:int, start:pd.Timestamp,end
         Receiverpoints
 
     """
-    cm.check.map(map_)
+    cm.check.check_type(map_,'map',raise_errors=True)
 
     if num_samples <= 0:
         return gpd.GeoDataFrame()
@@ -191,7 +192,7 @@ def point_process(map_:gpd.GeoDataFrame, num_samples:int, start:pd.Timestamp,end
     t = start + (end-start) * pd.Series(_rng.random(num_samples))
     return gpd.GeoDataFrame({'time':t},geometry=gpd.points_from_xy(xy.x,xy.y,z),crs=xy.crs)
 
-def random_walk(map_:gpd.GeoDataFrame, num_samples: int, start:pd.Timestamp,end:pd.Timestamp, polygon: Polygon = Polygon(), receiver_offset:float=1., avg_speed: float = .1, sampling_rate: int = 5) ->gpd.GeoDataFrame:
+def random_walk(map_:Map, num_samples: int, start:pd.Timestamp,end:pd.Timestamp, polygon: Polygon = Polygon(), receiver_offset:float=1., avg_speed: float = .1, sampling_rate: int = 5) ->ReceiverPoints:
     """Generates a set of receiver locations using a random point process.
 
     Receiver locations are within the map boundaries and outside of buildings.
