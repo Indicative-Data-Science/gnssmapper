@@ -88,13 +88,15 @@ def _convert_fcn(points:ReceiverPoints) -> ReceiverPoints:
     #convert GLONASS satellites with a FCN code to Orbital Slot numbers (Elevation must be used to filter out duplicates)
     def is_fcn(x):
         return (x.str[0] == 'R') & (x.str[1:].astype('int') >= 93)
-    points_=points.copy()
-    fcn = points_.loc[is_fcn(points['svid']),]    
-    osn1 = fcn.copy()
-    osn1['svid'] = fcn['svid'].map(cm.constants.fcn_to_osn).map(lambda x: x[1])
-    points_.loc[is_fcn(points['svid']),'svid'] = fcn['svid'].map(cm.constants.fcn_to_osn).map(lambda x: x[0])
-    return(pd.concat([points_,osn1], ignore_index=True))
-
+    if 'svid' in points.columns:
+        points_=points.copy()
+        fcn = points_.loc[is_fcn(points['svid']),]    
+        osn1 = fcn.copy()
+        osn1['svid'] = fcn['svid'].map(cm.constants.fcn_to_osn).map(lambda x: x[1])
+        points_.loc[is_fcn(points['svid']),'svid'] = fcn['svid'].map(cm.constants.fcn_to_osn).map(lambda x: x[0])
+        return pd.concat([points_,osn1], ignore_index=True)
+    else:
+        return points
 def _merge(points: ReceiverPoints, sats: gpd.GeoDataFrame) -> Observations:
     
     # convert points into geocentric WGS and merge
