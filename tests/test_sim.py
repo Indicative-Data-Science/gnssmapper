@@ -20,26 +20,46 @@ class TestPointProcess(unittest.TestCase):
         self.start = pd.Timestamp(np.datetime64('2020-09-01T09:00'))
         self.end = pd.Timestamp(np.datetime64('2020-09-01T10:00'))
 
-    def test_xy_process(self):
-        points = sim._xy_point_process(self.map_box,self.polygon,1000)
-        self.assertEqual(len(points), 1000)
-        self.assertEqual(self.map_box.crs,points.crs)
-        self.assertTrue(np.all(geo.is_outside(self.map_box,points)))
-        self.assertTrue(all([self.polygon.contains(p) for p in points]))
+    def test_walk(self):
+        static = sim._walk([0,0],1000,'random',0)
+        npt.assert_array_almost_equal(static, np.zeros((2,1000)))
+        random = sim._walk([0,0],1,'random',1)
+        npt.assert_almost_equal(random[0]**2+random[1]**2,1)
+
+    def test_poisson_point(self):
+        points = sim._poisson_point([-10,0,0,10],1000)
+        self.assertEqual((2,1000),points.shape)
+        self.assertGreaterEqual(np.min(points[0]),-10)
+        self.assertGreaterEqual(np.min(points[1]),0)
+        self.assertGreaterEqual(0,np.min(points[0]))
+        self.assertGreaterEqual(10,np.min(points[1]))
+
+    def test_guided_walk(self):
+        straight = sim._guided_walk([0,0],[2,1],1.25**0.5)
+        npt.assert_array_equal(straight,np.array([[1,2],[0.5,1]]))
+
+    def test_poisson_cluster(self):
+        points,time = sim._poisson_cluster([-10,0,0,10],self.start,self.end,100,'none',dict())
+        self.assertEqual((2,100),points.shape)
+        self.assertEqual((100,),time.shape)
+        self.assertGreaterEqual(np.min(points[0,:]),-10)
+        self.assertGreaterEqual(np.min(points[1,:]),0)
+        self.assertGreaterEqual(0,np.min(points[0,:]))
+        self.assertGreaterEqual(10,np.min(points[1,:]))
+        self.assertTrue(np.all(time>=np.datetime64('2020-09-01T09:00')))
+        self.assertTrue(np.all(time<=np.datetime64('2020-09-01T10:00')))
+
 
     def test_point_process(self):
-        points = sim.point_process(self.map_box,100,self.start,self.end,self.polygon)
+        points = sim.point_process(self.map_box,self.polygon.bounds,self.start,self.end,100)
         self.assertTrue(np.all(points["time"]>=np.datetime64('2020-09-01T09:00')))
         self.assertTrue(np.all(points["time"]<=np.datetime64('2020-09-01T10:00')))
         self.assertTrue(np.all(s.z>0 for s in points.geometry))
 
-    def test_random_walk(self):
-        points = sim.random_walk(self.map_box,100,self.start,self.end,self.polygon)
+        self.assertEqual(self.map_box.crs,points.crs)
         self.assertTrue(np.all(geo.is_outside(self.map_box,points.geometry)))
         self.assertTrue(all([self.polygon.contains(p) for p in points.geometry]))
-        self.assertTrue(np.all(points["time"]>=np.datetime64('2020-09-01T09:00')))
-        self.assertTrue(np.all(points["time"]<=(np.datetime64('2020-09-01T10:00')+np.timedelta64(1,'ms'))))
-        self.assertTrue(np.all(s.z>0 for s in points.geometry))
+
 
     def test_sample(self) -> None:
         obs=gpd.GeoDataFrame({'fresnel':np.arange(0,36,35).repeat(10000)})
