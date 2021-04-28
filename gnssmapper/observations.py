@@ -9,7 +9,7 @@ import pandas as pd
 
 from typing import Set
 import gnssmapper.common as cm
-from gnssmapper.geo import rays, to_crs, z
+from gnssmapper.geo import rays, to_crs, z, coordinates
 import gnssmapper.satellitedata as st
 from gnssmapper.common.check import ReceiverPoints, Observations
 
@@ -154,12 +154,12 @@ def elevation(lines: rays) -> np.array:
     lla = to_crs(lines,cm.constants.epsg_wgs84)
 
     # extract unit vector in direction of satellite
-    array = np.stack([np.array(a) for a in ecef],axis=0)
+    array = coordinates(ecef)
     delta = array[:, 1,:] - array[:, 0,:]
     delta = delta / np.linalg.norm(delta,axis=1,keepdims=True)
     
     #extract orthogonal unit vector at receiver location
-    receiver_lla = np.stack([np.array(a)[0] for a in lla], axis=0)
+    receiver_lla = coordinates(lla)[:,0,:]
     #NB: coords are in xy order.
     lat = np.radians(receiver_lla[:,1])
     long_ = np.radians(receiver_lla[:,0])

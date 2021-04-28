@@ -122,6 +122,9 @@ class TestMapMethods(unittest.TestCase):
         cm.check.check_type(output,'map',raise_errors=True)
         same = geo.map_to_crs(self.map_box, "epsg:27700")
         pdt.assert_frame_equal(self.map_box,same,check_dtype=False)
+        reverted = geo.map_to_crs(output, "epsg:27700")     
+        reverted=reverted.set_geometry(pygeos.geometry.set_precision(reverted.geometry.array.data,1))
+        pdt.assert_frame_equal(self.map_box,reverted,check_dtype=False,atol=0.1,rtol=0.1)
         
     def test_is_outside(self):
         point = self.map_box.geometry.representative_point()

@@ -87,12 +87,11 @@ class SatelliteData:
         days = doy['date']
         nanos = doy['time']
         self._update_orbits(days)
-        coords = pd.DataFrame([self._locate_sat(d, t, s)
-                               for d, t, s in zip(days, nanos, svid)], columns=['sv_x', 'sv_y', 'sv_z'])
+        coords = pd.DataFrame(self._locate_sat(days.to_numpy(), nanos.to_numpy(), svid.to_numpy()), columns=['sv_x', 'sv_y', 'sv_z'])
         new_columns = {svid.name:svid.array,time.name:time.array}
         return coords.assign(**new_columns)
 
-    def _locate_sat(self, day: str, time: float, svid: str) -> list:
+    def _locate_sat(self, day, time, svid) -> np.array:
         """Returns satellite location in geocentric WGS84 coordinates.
 
         Uses interpolation from a pre-calculated dictionary of coefficients. 
@@ -111,38 +110,63 @@ class SatelliteData:
         list
             xyz in wgs84 cartesian co-ords
         """
+        day=np.array(day)
+        time=np.array(time)
+        svid=np.array(svid)
+
+        output = np.ones((day.shape[0],3))
+        output[:]=np.nan
+        day_unique=np.unique(day)
+        svid_unique=np.unique(svid)
+        for d in day_unique:
+            for s in svid_unique:
+                mask = (day==d) & (svid==s)
+                result =self._locate_sat_vectorised(d,time[mask],s)
+                output[mask,:]=result
+        return output
+
+    def _locate_sat_vectorised(self, day: str, times: np.array, svid: str) -> np.array:
+        """Returns satellite location in geocentric WGS84 coordinates.
+        """
 
         if day not in self.orbits or svid not in self.orbits[day]:
             warnings.warn(
                 f"orbit information not available for {svid} on {day}")
-            return [np.nan, np.nan, np.nan]
+            out = np.ones_like(times)
+            out[:] = np.nan
+            return out
 
-        # Each day and svid has a nested dictionary of coeffeicients covering different periods of the day.
+        orbit = self.orbits[day][svid]
+        # Each day and svid has a nested dictionary of coefficients covering different periods of the day.
         # Select the one that has a key closest to the required time.
         # ordered dictionary in sorted order for keys
-        keys = [float(x) for x in self.orbits[day][svid]]
-        close = bisect.bisect_left(keys, time)
-        if close == 0:
-            idx = close
-        elif close == len(keys):
-            idx = close-1
-        else:
-            idx = min([close-1, close], key=lambda x: abs(keys[x]-time))
+        keys = list(orbit)
+        keys_int = np.array(keys).astype('float').astype('int64')
+        close = np.searchsorted(keys_int,times,side='left')
+        
+        lower = np.maximum(0,close-1)
+        upper = np.minimum(len(keys_int)-1,close)
+        lower_diff = np.abs(np.array([keys_int[l] for l in list(lower)])-times)
+        upper_diff = np.abs(np.array([keys_int[l] for l in list(upper)])-times)
+        idx=np.where(lower_diff<upper_diff,lower,upper)
 
-        poly_dict = self.orbits[day][svid][list(self.orbits[day][svid])[idx]]
+        def predict(i,time):
+            poly_dict = orbit[keys[i]]
+            if time > poly_dict['ub'] or time < poly_dict['lb']:
+                warnings.warn(
+                    f"Orbits available for {svid} on {day}, however a valid dictionary wasn't found at {time}")
+                return [np.nan, np.nan, np.nan]
+            scaled_time = (time - poly_dict['mid'][0]) / poly_dict['scale'][0]
 
-        if time > poly_dict['ub'] or time < poly_dict['lb']:
-            warnings.warn(
-                f"Orbits available for {svid} on {day}, however a valid dictionary wasn't found at {time}")
-            return [np.nan, np.nan, np.nan]
+            def predict_dim(dim):
+                n = ['x', 'y', 'z'].index(dim) + 1
+                return P.polyval(scaled_time, poly_dict[dim]) * poly_dict['scale'][n] + poly_dict['mid'][n]
 
-        scaled_time = (time - poly_dict['mid'][0]) / poly_dict['scale'][0]
+            return [predict_dim(dim) for dim in ['x', 'y', 'z']]
 
-        def predict(dim):
-            n = ['x', 'y', 'z'].index(dim) + 1
-            return P.polyval(scaled_time, poly_dict[dim]) * poly_dict['scale'][n] + poly_dict['mid'][n]
+        return np.array([predict(i,t) for i,t in zip(idx,times)])
+        
 
-        return [predict(dim) for dim in ['x', 'y', 'z']]
 
     def _update_orbits(self, days: pd.Series) -> None:
         """Loads orbits, updating orbit database where necessary.

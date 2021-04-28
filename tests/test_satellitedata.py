@@ -91,8 +91,8 @@ class TestSVIDLocation(unittest.TestCase):
         time = pd.Series([np.datetime64('2020-02-11T00:59:42', 'ns')])
         gpstime = tm.gps_to_doy(tm.utc_to_gps(time))
         entry=self.truncated_orbits.loc[(self.truncated_orbits['svid']=="G18") & (self.truncated_orbits['time']==gpstime['time'][0]),:].reset_index(drop=True)
-        predict=self.SatelliteData._locate_sat(gpstime['date'][0],gpstime['time'][0],"G18")
-        npt.assert_almost_equal(predict,np.asarray([entry.x,entry.y,entry.z]).flatten(),decimal=3)
+        predict=self.SatelliteData._locate_sat([gpstime['date'][0]],[gpstime['time'][0]],["G18"])
+        npt.assert_almost_equal(predict,np.asarray([entry.x,entry.y,entry.z]).reshape(1,3),decimal=3)
 
     def test_locate_satellites(self):
         time = pd.Series([np.datetime64('2020-02-11T00:59:42', 'ns')])
