@@ -62,6 +62,15 @@ def _heights(param):
     ub = lb + 3/height_param[1]
     return (lb, (lb + ub) / 2, ub)
 
+def fit_edge(height: np.array, ss: np.array,starting_params:np.array=np.array([40,0.1,40,10])) -> np.array:
+    """Fit a 4PL to the raw SS data, and return height of max gradient """
+    if height.shape[0] != ss.shape[0]:
+        raise ValueError('height and ss vectors differ in length')
+    model=fpl()
+    model.param=starting_params
+    param=model.fit_offline(height,ss,lik=False)[-1]
+    return _heights([np.nan,param])
+
 def fit(height: np.array, ss: np.array, iterations: int = 4, batch_size: int = 0, online: bool = False, 
         starting_params: list = [], online_params: dict = {
             'ss_lr': [0.0002, .01, .1, .0002],'height_lr': [0.00001, .01, .1, .00001], 'batch_size': 100,

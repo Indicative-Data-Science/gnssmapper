@@ -164,10 +164,10 @@ def point_process(map_:Map, bounds:np.array, start:pd.Timestamp,end:pd.Timestamp
     cm.check.check_type(map_,'map',raise_errors=True)
     xy,t = _poisson_cluster(bounds,start,end,num_samples,cluster,cluster_args)
     points=gpd.GeoSeries(gpd.points_from_xy(xy[0,:],xy[1,:]),crs=map_.crs)
-    z = ground_level(map_,points) + receiver_offset
-    outside = is_outside(map_,points)
+    outside = is_outside(map_,points,box(*bounds))
+    z = ground_level(map_,points[outside]) + receiver_offset
     
-    return gpd.GeoDataFrame({'time':t[outside]},geometry=gpd.points_from_xy(xy[0,outside],xy[1,outside],z[outside]),crs=map_.crs)
+    return gpd.GeoDataFrame({'time':t[outside]},geometry=gpd.points_from_xy(xy[0,outside],xy[1,outside],z),crs=map_.crs)
 
 
 def _poisson_cluster(bounds:np.array, start:pd.Timestamp,end:pd.Timestamp, num_samples:int,cluster:str,cluster_args:dict) -> tuple:
@@ -184,21 +184,21 @@ def _poisson_cluster(bounds:np.array, start:pd.Timestamp,end:pd.Timestamp, num_s
         length = cluster_args["duration"].astype('timedelta64[s]').astype(np.int64)
         durations = np.ceil(expon.rvs(size=(num_samples,),scale=length)).astype(np.int64)
         xy =np.concatenate(
-            [_walk(parent_xy[:,i], d, cluster, cluster_args['speed']) for i,d in iter(durations)],
+            [_walk(parent_xy[:,i], d, cluster, cluster_args['speed']) for i,d in enumerate(durations)],
             axis=1)
         time= np.concatenate([
-            t+np.array(range(0,d)).astype('timedelta64[s]' for t,d in zip(parent_time,
+            t+np.array(range(0,d)).astype('timedelta64[s]') for t,d in zip(parent_time,
                                                                           durations)
-                                                                          )
+                                                                          
         ])
     else:
         xy_list =[_guided_walk(parent_xy[:,i], cluster_args["endpoint"], cluster_args['speed']) for i in range(num_samples)]
-        durations = [len(x) for x in xy_list]
+        durations = [x.shape[1] for x in xy_list]
         xy = np.concatenate(xy_list,axis=1)
         time = np.concatenate([
-            t+np.array(range(0,d)).astype('timedelta64[s]' for t,d in zip(parent_time,
+            t+np.array(range(0,d)).astype('timedelta64[s]') for t,d in zip(parent_time,
                                                                           durations)
-                                                                          )
+                                                                          
         ])
     return np.array([xy[0,:],xy[1,:]]),time
 

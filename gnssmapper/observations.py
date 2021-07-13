@@ -67,7 +67,8 @@ def observe(points: ReceiverPoints, constellations: Set[str] = set()) -> Observa
 
 def _get_satellites(points: ReceiverPoints, constellations: Set[str]) -> pd.DataFrame:
     """ Dataframe of all svids visible to a set of points """
-
+    if len(points)==0:
+        return pd.DataFrame(columns=['svids','time'])
     # Generate dataframe of all svids supported by receiver
     gps_time = cm.time.utc_to_gps(points['time'].drop_duplicates())
     sd = st.SatelliteData()
@@ -98,7 +99,6 @@ def _convert_fcn(points:ReceiverPoints) -> ReceiverPoints:
     else:
         return points
 def _merge(points: ReceiverPoints, sats: gpd.GeoDataFrame) -> Observations:
-    
     # convert points into geocentric WGS and merge
     receiver = to_crs(points, cm.constants.epsg_satellites)
     receiver = receiver.assign(
