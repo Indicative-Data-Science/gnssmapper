@@ -30,13 +30,14 @@ class SatelliteData:
 
     @property
     def metadata(self) -> set:
-        filenames = [f for f in importlib.resources.contents(data.orbits) if re.match("orbits_", f)]
+        filenames = [f for f in importlib.resources.contents(
+            data.orbits) if re.match("orbits_", f)]
         days = [re.split(r'_|\.', f)[1] for f in filenames]
         return set(days)
 
     def _load_orbit(self, day: str) -> dict:
         try:
-            with importlib.resources.open_binary(data.orbits,_get_filename(day)) as json_file:
+            with importlib.resources.open_binary(data.orbits, _get_filename(day)) as json_file:
                 data_var = json.load(json_file)
             return data_var
 
@@ -64,8 +65,9 @@ class SatelliteData:
         days = cm.time.gps_to_doy(time)['date']
 
         self._update_orbits(days)
-        svids = pd.Series(days.map(lambda x: list(self.orbits[x].keys())), name='svid')
-        svids.index=time
+        svids = pd.Series(days.map(lambda x: list(
+            self.orbits[x].keys())), name='svid')
+        svids.index = time
         return svids
 
     def locate_satellites(self, svid: pd.Series, time: pd.Series) -> pd.DataFrame:
@@ -87,8 +89,9 @@ class SatelliteData:
         days = doy['date']
         nanos = doy['time']
         self._update_orbits(days)
-        coords = pd.DataFrame(self._locate_sat(days.to_numpy(), nanos.to_numpy(), svid.to_numpy()), columns=['sv_x', 'sv_y', 'sv_z'])
-        new_columns = {svid.name:svid.array,time.name:time.array}
+        coords = pd.DataFrame(self._locate_sat(days.to_numpy(), nanos.to_numpy(
+        ), svid.to_numpy()), columns=['sv_x', 'sv_y', 'sv_z'])
+        new_columns = {svid.name: svid.array, time.name: time.array}
         return coords.assign(**new_columns)
 
     def _locate_sat(self, day, time, svid) -> np.array:
@@ -110,19 +113,19 @@ class SatelliteData:
         list
             xyz in wgs84 cartesian co-ords
         """
-        day=np.array(day)
-        time=np.array(time)
-        svid=np.array(svid)
+        day = np.array(day)
+        time = np.array(time)
+        svid = np.array(svid)
 
-        output = np.ones((day.shape[0],3))
-        output[:]=np.nan
-        day_unique=np.unique(day)
-        svid_unique=np.unique(svid)
+        output = np.ones((day.shape[0], 3))
+        output[:] = np.nan
+        day_unique = np.unique(day)
+        svid_unique = np.unique(svid)
         for d in day_unique:
             for s in svid_unique:
-                mask = (day==d) & (svid==s)
-                result =self._locate_sat_vectorised(d,time[mask],s)
-                output[mask,:]=result
+                mask = (day == d) & (svid == s)
+                result = self._locate_sat_vectorised(d, time[mask], s)
+                output[mask, :] = result
         return output
 
     def _locate_sat_vectorised(self, day: str, times: np.array, svid: str) -> np.array:
@@ -142,15 +145,15 @@ class SatelliteData:
         # ordered dictionary in sorted order for keys
         keys = list(orbit)
         keys_int = np.array(keys).astype('float').astype('int64')
-        close = np.searchsorted(keys_int,times,side='left')
-        
-        lower = np.maximum(0,close-1)
-        upper = np.minimum(len(keys_int)-1,close)
+        close = np.searchsorted(keys_int, times, side='left')
+
+        lower = np.maximum(0, close-1)
+        upper = np.minimum(len(keys_int)-1, close)
         lower_diff = np.abs(np.array([keys_int[l] for l in list(lower)])-times)
         upper_diff = np.abs(np.array([keys_int[l] for l in list(upper)])-times)
-        idx=np.where(lower_diff<upper_diff,lower,upper)
+        idx = np.where(lower_diff < upper_diff, lower, upper)
 
-        def predict(i,time):
+        def predict(i, time):
             poly_dict = orbit[keys[i]]
             if time > poly_dict['ub'] or time < poly_dict['lb']:
                 warnings.warn(
@@ -164,9 +167,7 @@ class SatelliteData:
 
             return [predict_dim(dim) for dim in ['x', 'y', 'z']]
 
-        return np.array([predict(i,t) for i,t in zip(idx,times)])
-        
-
+        return np.array([predict(i, t) for i, t in zip(idx, times)])
 
     def _update_orbits(self, days: pd.Series) -> None:
         """Loads orbits, updating orbit database where necessary.
@@ -185,14 +186,15 @@ class SatelliteData:
             orbit_dic = defaultdict(dict)
             print(f"downloading sp3 file for {day}.")
             try:
-                sp3 = _get_sp3_file(day,'final')
+                sp3 = _get_sp3_file(day, 'final')
             except:
                 warnings.warn("final SP3 file not available, using rapid")
                 try:
                     sp3 = _get_sp3_file(day, 'rapid')
                 except:
-                    warnings.warn("rapid SP3 file not available, using ultra (GPS + GLONASS only)")
-                    sp3 = _get_sp3_file(day,'ultra')
+                    warnings.warn(
+                        "rapid SP3 file not available, using ultra (GPS + GLONASS only)")
+                    sp3 = _get_sp3_file(day, 'ultra')
             df = _get_sp3_dataframe(sp3)
             print(f"creating {day} orbit.")
             unsorted_orbit = _create_orbit(df)
@@ -222,7 +224,8 @@ def _create_orbit(sp3_df: pd.DataFrame) -> dict:
         {id:{midpoint of period: {dictionary of estimates}}}
     """
     day = sp3_df['date'].str[4:].astype(int)
-    sp3_df['tm'] = sp3_df['time'].astype(int) + (day-min(day)) * 24 * 3600 * 10**9
+    sp3_df['tm'] = sp3_df['time'].astype(
+        int) + (day-min(day)) * 24 * 3600 * 10**9
     sp3_df = sp3_df.sort_values(['svid', 'tm'])
     polyXYZ = defaultdict(dict)
 
@@ -292,7 +295,6 @@ def _get_sp3_file(date: str, orbit_type='final') -> str:
         orbit file contents in string format
 
     """
-    
 
     filename = _sp3_filename[orbit_type](date)
     datasite = _sp3_datasite[orbit_type]
@@ -301,9 +303,9 @@ def _get_sp3_file(date: str, orbit_type='final') -> str:
         url = datasite + _sp3_filepath(date) + filename
         local_path = data.sp3.__path__[0]+'/'+filename
         urllib.request.urlretrieve(url, local_path)
-        
+
     zipfile = importlib.resources.read_binary(data.sp3, filename)
-    
+
     extension = filename.rsplit(".", maxsplit=1)[1]
     if extension == 'gz':
         binary = gzip.decompress(zipfile)
@@ -331,7 +333,8 @@ def _get_sp3_dataframe(sp3: str) -> pd.DataFrame:
     """
 
     def get_date(row: str):
-        _utc = pd.Timestamp(year=int(row[3:7]), month=int(row[8:10]), day=int(row[11:13]))
+        _utc = pd.Timestamp(year=int(row[3:7]), month=int(
+            row[8:10]), day=int(row[11:13]))
         year = str(_utc.year)
         day = str(_utc.dayofyear)
         return year + day.zfill(3)
@@ -379,15 +382,19 @@ _sp3_datasite = {
     'ultra': "http://navigation-office.esa.int/products/gnss-products/",
     'rapid': "ftp://ftp.gfz-potsdam.de/GNSS/products/mgnss/",
     'final': "http://navigation-office.esa.int/products/gnss-products/"
-    }
+}
+
+
 def _sp3_filepath(date):
     return str(_sp3_filename_date_conversion(date)['week'][0])+'/'
 
+
 _sp3_filename = {
     'ultra': lambda x: 'esu' + str(_sp3_filename_date_conversion(x)['week'][0]) + str(_sp3_filename_date_conversion(x)['day'][0]) + '_00.sp3.Z',
-    'rapid': lambda x: 'GBM0MGXRAP_'+ x + '0000_01D_05M_ORB.SP3.gz',
+    'rapid': lambda x: 'GBM0MGXRAP_' + x + '0000_01D_05M_ORB.SP3.gz',
     'final': lambda x: 'ESA0MGNFIN_' + x + '0000_01D_05M_ORB.SP3.gz'
-    }
+}
+
 
 def _sp3_filename_date_conversion(date):
     """ Converts a doy format to gps week  """

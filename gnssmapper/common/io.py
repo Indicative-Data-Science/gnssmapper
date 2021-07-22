@@ -1,7 +1,7 @@
 """ This module provides file read and write capabilities for gnssmapper objects.
-
+    Currently unused! - just use the geopandas methods and tweak datatypes on loading...
 """
-from typing import Union,Set
+from typing import Union, Set
 import warnings
 
 
@@ -13,11 +13,12 @@ import pyproj.crs
 
 from gnssmapper.common.constants import supported_constellations
 
+
 def to_file(df, filename, driver="GPKG", schema=None, index=None, **kwargs):
     """ Write the ``GeoDataFrame`` to a file.
 
     By default, a GeoPackage file is written, but any OGR data source
-    supported by Fiona can be written. Support for datetime fields varies between drivers. 
+    supported by Fiona can be written. Support for datetime fields varies between drivers.
 
     Parameters
     ----------
@@ -46,22 +47,23 @@ def to_file(df, filename, driver="GPKG", schema=None, index=None, **kwargs):
     by using the encoding keyword parameter, e.g. ``encoding='utf-8'``.
     """
     # make any changes
-    data=df.copy()
-    
-    import fiona
-    fiona.Collection.schema(l)
-    infer_schema
-    _geometry_types
-    look like they can help.
+    data = df.copy()
 
-    fiona
+    # import fiona
+    # fiona.Collection.schema(l)
+    # infer_schema
+    # _geometry_types
+    # look like they can help.
 
-    #check if datframe of specific type
+    # fiona
+
+    # check if datframe of specific type
 
     data.to_file()
 
-    final['Cn0DbHz'] = final['Cn0DbHz'].astype('float64') #otherwise won't write)
-    inal['time'] = final.time.astype('datetime64[s]') 
+    final['Cn0DbHz'] = final['Cn0DbHz'].astype(
+        'float64')  # otherwise won't write)
+    inal['time'] = final.time.astype('datetime64[s]')
     }
 
 
@@ -92,8 +94,8 @@ def read_file(filename, bbox=None, mask=None, rows=None, **kwargs):
         possible keywords, type:
         ``import fiona; help(fiona.open)``
     """
-    
-    output = gpd.read_file(filename, bbox = bbox, mask = mask, rows = rows, **kwargs)
-    
+
+    output = gpd.read_file(filename, bbox=bbox, mask=mask, rows=rows, **kwargs)
+
 
     return output

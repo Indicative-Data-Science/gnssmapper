@@ -13,6 +13,7 @@ import pandas as pd
 import gnssmapper.common as cm
 from gnssmapper.common.check import ReceiverPoints
 
+
 def read_gnsslogger(filepath: str) -> ReceiverPoints:
     """Process a log file and returns a set of gnss receiverpoints.
 
@@ -37,7 +38,7 @@ def read_gnsslogger(filepath: str) -> ReceiverPoints:
     points = join_receiver_position(
         gnss_obs, gnss_fix)
 
-    cm.check.check_type(points,'receiverpoints',raise_errors=True)
+    cm.check.check_type(points, 'receiverpoints', raise_errors=True)
     return points
 
 
@@ -72,8 +73,8 @@ def read_csv_(filepath: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
             if "version" in line.lower():
                 start = line.lower().find("version")+9
                 string = line[start:].split(" ", maxsplit=1)[0]
-                version = ".".join(filter(str.isdigit,string))
-                
+                version = ".".join(filter(str.isdigit, string))
+
             if "platform" in line.lower():
                 start = line.lower().find("platform")+10
                 platform = line[start:].split(" ", maxsplit=1)[0]
@@ -95,21 +96,20 @@ def read_csv_(filepath: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
             " ", "") for line in f if "raw" in line.lower())
         gnss_raw = pd.read_csv(
             StringIO("\n".join(raw))
-            ).convert_dtypes(convert_string=False,
-                convert_integer=True,
-                convert_boolean=False,
-                convert_floating=False)
-
+        ).convert_dtypes(convert_string=False,
+                         convert_integer=True,
+                         convert_boolean=False,
+                         convert_floating=False)
 
     with open(filepath, 'r') as f:
         fix = (line.split(",", maxsplit=1)[1].replace(
             " ", "") for line in f if "fix" in line.lower())
         gnss_fix = pd.read_csv(
             StringIO("\n".join(fix))
-            ).convert_dtypes(convert_string=False,
-                convert_integer=True,
-                convert_boolean=False,
-                convert_floating=False)
+        ).convert_dtypes(convert_string=False,
+                         convert_integer=True,
+                         convert_boolean=False,
+                         convert_floating=False)
 
     return (gnss_raw, gnss_fix)
 
@@ -120,7 +120,7 @@ def read_csv_(filepath: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
 #     out['TimeNanos'] = out['TimeNanos'].astype('Int64')
 #     out['FullBiasNanos'] = out['FullBiasNanos'].astype('Int64')
 #     out['TimeNanos']=gnss_raw['TimeNanos'].astype('Int64')
-    
+
 #     out['TimeNanos']=df['TimeNanos'].astype() - gnss_raw['FullBiasNanos']
 
 #     # compute transmission time (nanos since gps epoch)
@@ -144,17 +144,20 @@ def _compare_version(actual: str, expected: str) -> bool:
 
     return True
 
+
 def _compare_platform(actual: str, expected: int) -> bool:
     """Tests whether the OS version meets dependencies."""
     if str(actual).isdigit():
         return int(actual) >= int(expected)
-    
+
     if actual in cm.constants.platform:
         return cm.constants.platform[actual] >= int(expected)
-    
+
     else:
-        warnings.warn(f'Platform {actual} found in log file, does not correspond to known platform number.')
+        warnings.warn(
+            f'Platform {actual} found in log file, does not correspond to known platform number.')
         return False
+
 
 def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
     """Generates signal features from raw measurements.
@@ -183,14 +186,15 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
     # ReceivedSvTimeNanos (time since start of gnss period)
     # + gps time of start of gnss period
     tx = (gnss_raw['ReceivedSvTimeNanos']
-         - galileo_ambiguity(gnss_raw['ReceivedSvTimeNanos']).where(constellation == 'E', 0)
+          - galileo_ambiguity(gnss_raw['ReceivedSvTimeNanos']
+                              ).where(constellation == 'E', 0)
           + period_start_time(
               rx, gnss_raw['State'], constellation)
           + constellation.map(cm.constants.constellation_epoch_offset).convert_dtypes())
 
-    #glonasss already accounts for leap seconds.
-    tx = tx + cm.constants.leap_seconds(cm.time.gps_to_utc(tx)).where(constellation == 'R',0)* 10**9
-
+    # glonasss already accounts for leap seconds.
+    tx = tx + cm.constants.leap_seconds(cm.time.gps_to_utc(tx)
+                                        ).where(constellation == 'R', 0) * 10**9
 
     # This will fail if the rx and tx are in seperate weeks
     # add code to remove a week if failed
@@ -198,12 +202,14 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
     if not check_.all():
         warnings.warn(
             "rx less than tx, corrected assuming due to different gps weeks")
-        correction = constellation.map(cm.constants.nanos_in_period).convert_dtypes()
-        tx = tx.where(check_,tx-correction)
+        correction = constellation.map(
+            cm.constants.nanos_in_period).convert_dtypes()
+        tx = tx.where(check_, tx-correction)
 
     # check we have no nonsense psuedoranges
     if not(0 < np.min(rx - tx) <= np.max(rx - tx) < 1e9):
-        warnings.warn(f'Calculated pr time outside 0 to 1 seconds: {np.min(rx-tx)} - {np.max(rx-tx)}')
+        warnings.warn(
+            f'Calculated pr time outside 0 to 1 seconds: {np.min(rx-tx)} - {np.max(rx-tx)}')
 
     # Pseudorange
     pr = (rx-tx) * (10**-9) * cm.constants.lightspeed
@@ -228,13 +234,14 @@ def galileo_ambiguity(x: np.array) -> np.array:
 def period_start_time(rx: pd.Series, state: pd.Series, constellation: pd.Series) -> pd.Series:
     """Calculates the start time for the gnss period"""
     required_states = constellation.map(cm.constants.required_states)
-    nanos_in_period = constellation.map(cm.constants.nanos_in_period).convert_dtypes()
+    nanos_in_period = constellation.map(
+        cm.constants.nanos_in_period).convert_dtypes()
     missing = required_states.isna() | state.isna()
 
-    tx_valid = [not(m) and all(s & n for n in r) for s,r,m in zip(state,required_states,missing)]
+    tx_valid = [not(m) and all(s & n for n in r)
+                for s, r, m in zip(state, required_states, missing)]
     start = nanos_in_period * (rx // nanos_in_period)
-    return start.where(tx_valid,pd.NA)
- 
+    return start.where(tx_valid, pd.NA)
 
 
 def join_receiver_position(
@@ -244,26 +251,26 @@ def join_receiver_position(
 
     Joined by utc time.
     """
-    clean_fix = gnss_fix[["Longitude", "Latitude", "Altitude", "(UTC)TimeInMs"]].dropna().sort_values("(UTC)TimeInMs")
+    clean_fix = gnss_fix[["Longitude", "Latitude", "Altitude",
+                          "(UTC)TimeInMs"]].dropna().sort_values("(UTC)TimeInMs")
     # Converting utc type to int64 (fine because NA's have been dropped). This is due to a merge_asof bug with Int64.
-    clean_fix["(UTC)TimeInMs"]= clean_fix["(UTC)TimeInMs"].astype('int64')
+    clean_fix["(UTC)TimeInMs"] = clean_fix["(UTC)TimeInMs"].astype('int64')
     clean_obs = gnss_obs.dropna(subset=["time_ms"]).sort_values("time_ms")
     clean_obs["time_ms"] = clean_obs["time_ms"].astype('int64')
-    df = pd.merge_asof(clean_obs, clean_fix, left_on="time_ms", right_on="(UTC)TimeInMs", suffixes=["obs", "fix"], tolerance=cm.constants.join_tolerance_ms, direction='nearest')
-    df.dropna(subset=["(UTC)TimeInMs"],inplace=True)
-    df.reset_index(drop=True, inplace = True)
-    df.drop(columns=["(UTC)TimeInMs","time_ms"],inplace = True)
+    df = pd.merge_asof(clean_obs, clean_fix, left_on="time_ms", right_on="(UTC)TimeInMs", suffixes=[
+                       "obs", "fix"], tolerance=cm.constants.join_tolerance_ms, direction='nearest')
+    df.dropna(subset=["(UTC)TimeInMs"], inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    df.drop(columns=["(UTC)TimeInMs", "time_ms"], inplace=True)
 
     if len(df) != len(gnss_obs):
         warnings.warn(
             f'{len(gnss_obs)-len(df)} observations discarded without matching fix.'
         )
-    
 
     gdf = gpd.GeoDataFrame(
         df,
-        geometry=gpd.points_from_xy(df["Longitude"],df["Latitude"], 
+        geometry=gpd.points_from_xy(df["Longitude"], df["Latitude"],
                                     df["Altitude"]),
         crs=cm.constants.epsg_gnss_logger)
     return gdf
-
