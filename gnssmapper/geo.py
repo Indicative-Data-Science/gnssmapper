@@ -22,8 +22,11 @@ from shapely.ops import transform
 from shapely.wkt import loads
 
 import gnssmapper.common as cm
+from gnssmapper.common.check import Rays
 
-
+def coordinates(rays:Rays) -> np.array:
+    coords=pygeos.get_coordinates(rays.array.data,include_z=True)
+    return coords.reshape((rays.shape[0],2,3))
 
 def z(points: gpd.GeoSeries) -> pd.Series:
     """Returns Z coordinate for a set of point geometries """
@@ -49,16 +52,27 @@ def to_crs(df: Union[gpd.GeoDataFrame,gpd.GeoSeries], target: pyproj.crs.CRS) ->
     
     def transform_geoseries(geometry):
         target_crs=pyproj.crs.CRS(target)
+        if target_crs==geometry.crs:
+            return geometry
         cm.check.crs(target_crs)
         cm.check.crs(geometry.crs)
         transformer = pyproj.Transformer.from_crs(geometry.crs, target_crs,always_xy=True)
-        return (transform(transformer.transform,g) for g in geometry)
+        if not all(pygeos.has_z(geometry.array.data)):
+            coords=pygeos.get_coordinates(geometry.array.data,include_z=False)
+            new_coords = transformer.transform(coords[:,0],coords[:,1])
+        else:
+            coords=pygeos.get_coordinates(geometry.array.data,include_z=True)
+            new_coords = transformer.transform(coords[:,0],coords[:,1],coords[:,2])
+        return pygeos.set_coordinates(geometry.array.data.copy(),np.array(new_coords).T)
 
     if isinstance(df,gpd.GeoDataFrame):
-        transformed_geometry = transform_geoseries(df.geometry)
-        return df.set_geometry(list(transformed_geometry),crs=target)
+        return df.set_geometry(
+            transform_geoseries(df.geometry),
+            crs=target)
     else:
-        return gpd.GeoSeries(transform_geoseries(df),crs=target,index=df.index,name=df.name)
+        return gpd.GeoSeries(
+            transform_geoseries(df),
+            crs=target,index=df.index,name=df.name)
 
 def rays(receivers: list, sats: list) -> pygeos.Geometry:
     """ Turns arrays of points into array of linestrings.

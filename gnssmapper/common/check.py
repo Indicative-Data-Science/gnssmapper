@@ -31,8 +31,7 @@ def _rays(obj: Rays) -> dict:
             'Expecting Linestrings': not obj.geom_type.eq("LineString").all(),
             'Missing z coordinates': not obj.has_z.all(),
             'More than 2 points in Linestring': np.not_equal(
-                pygeos.count_coordinates(
-                    pygeos.io.from_shapely(obj)),
+                pygeos.count_coordinates(obj.array.data),
                 2 * len(obj)).any(),
         }
 

@@ -26,8 +26,8 @@ class TestObservations(unittest.TestCase):
         data = satellitedata.SatelliteData()
         data._update_orbits(["2020042"])
         self.assertTrue(np.all([l in list(data.orbits["2020042"].keys()) for l in list(obs.svid)]))
-        wgs=data._locate_sat("2020042",3600*1e9,obs.svid[0])
-        npt.assert_almost_equal(obs.loc[0,["sv_x","sv_y","sv_z"]],wgs,decimal=1)
+        wgs=data._locate_sat(["2020042"],[3600*1e9],[obs.svid[0]])
+        npt.assert_almost_equal(obs.loc[0,["sv_x","sv_y","sv_z"]],wgs.flatten(),decimal=1)
 
     def test_get_multiple_satellites(self) -> None:
         points2 = pd.concat([self.points, self.points]).reset_index(drop=True)

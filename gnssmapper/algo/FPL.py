@@ -37,11 +37,19 @@ class FourParamLogisticRegression:
         self.batch_size = batch_size
         self.param = np.array(initial_param)
 
-        
-
     def _four_param_sigmoid(self,z:np.array)->np.array:
-        """ Forward pass of LR function. Returns Prob(X)."""
+        """ Forward pass of LR function. Returns Prob(X)"""
         return self.param[3] + (self.param[0] - self.param[3]) * expit(self.param[1]*(z - self.param[2]))
+
+    def deriv(self,z:np.array)->np.array:
+        """ Forward pass of LR function. Returns deriv(X)"""
+        f = expit(self.param[1]*(z - self.param[2]))
+        return (self.param[0] - self.param[3]) * self.param[1] * f * (1-f)
+
+    def dderiv(self,z:np.array)->np.array:
+        """ Forward pass of LR function. Returns dderiv(X)"""
+        f = expit(self.param[1]*(z - self.param[2]))
+        return (self.param[0] - self.param[3]) * self.param[1] * self.param[1] * f * (1-f) * (1-2*f)
 
     def _batch_update(self,xhat,ytrue):
         """updates model parameters using a batch of data
@@ -101,13 +109,13 @@ class FourParamLogisticRegression:
     def predict(self, X_):
         return np.where(self.prob(X_)>0.5,1,0)
 
-    def fit_offline(self, X, Y):
+    def fit_offline(self, X, Y,lik=True):
         """Offline Gradient descent using entire training data
         Parameters
         ----------
         X : Training vector, 1-D only.
         y : Target vector relative to X.
-
+        lik: Fit using mle for binomial Y (alternative is least squares)
         Returns
         -------
         self : object
@@ -121,8 +129,7 @@ class FourParamLogisticRegression:
 
         def neg_log_likelihood(theta, X, y):
             m = X.shape[0]
-            denom_ = 1 + np.exp( - theta[1] * (X - theta[2]) )
-            yhat = theta[3] + (theta[0] - theta[3])/denom_
+            yhat = theta[3] + (theta[0] - theta[3]) * expit(theta[1] * (X - theta[2]))
             return -(1 / m) * np.sum(y*np.log(yhat) + (1 - y)*np.log(1 - yhat))
 
         def optimize_theta(theta, X, y):
@@ -146,8 +153,16 @@ class FourParamLogisticRegression:
 
         #     return np.multiply(opt_weights.x,np.array([1,100,1000,1]))
 
+        def cost(theta, X, y):
+            yhat = theta[3] + (theta[0] - theta[3]) * expit(theta[1] * (X - theta[2]))
+            return np.sum((y-yhat)**2)
 
-        self.param = optimize_theta(theta_0, X_, Y_)
+        def optimize_theta_cost(theta, X, y):
+            bounds = Bounds([1e-3, 1e-3, 0, 0], [100, 100, 1000, 100])
+            opt_weights = minimize(cost, theta, method='L-BFGS-B',bounds=bounds, args=(X, y.flatten()))
+            return opt_weights.x
+
+        self.param = optimize_theta(theta_0, X_, Y_) if lik else optimize_theta_cost(theta_0, X_, Y_)
         param[-1]=self.param
         return param
 

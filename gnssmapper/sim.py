@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from shapely.geometry import box, Point, Polygon
 from typing import Set
+from scipy.stats import uniform, levy, expon
 
 # from scipy.stats import rice
 
@@ -19,39 +20,35 @@ from gnssmapper.geo import fresnel, to_crs, is_outside,ground_level
 
 _rng = np.random.default_rng()
 
-def simulate(map_: Map, method:str, num_samples: int, start:pd.Timestamp,end:pd.Timestamp,method_args:dict=dict(),samplings_args:dict=dict()) -> Observations:
+def simulate(map_: Map, bounds:np.array, start:pd.Timestamp,end:pd.Timestamp, num_samples:int, cluster:str='none',cluster_args:dict=dict(),receiver_offset:float=1.0,sampling_args:dict=dict()) -> Observations:
     """Simulates observations made by a receiver.
 
     Parameters
     ----------
     map_ : Map
-        A map
-    method : str
-        process used to generate receiverpoints. Values are {'point_process','random_walk'}
-    num_samples : int
-        number of receiverpoints to simulate
+     bounds : np.array
+        spatial bounds with minx,miny,maxx,maxy format
     start : pd.Timestamp
-        start boundary for observation time.
+        lower time bound
     end : pd.Timestamp
-        end boundary for observation time.
-    method_args : dict, optional
-        method dependent arguments for the process of generating receiver points. 
-    samplings_args : dict, optional
-        arguments for the process of sampling observations. See gnssmapper.sim.sample for details.
+        upper time bound
+    num_samples : int
+        number of receivers (parent process) to simulate 
+    cluster : str, optional
+        type of child process, by default 'none'
+    cluster_args : dict,optional
+        passed to clustering (child) process, by default dict().
+    receiver_offset : float, optional
+        The altitude of receiver location above ground level, by default 1.0
+    sampling_args : dict, optional
+        [description], by default dict()
 
     Returns
     -------
-    gpd.GeoDataFrame
-        A set of observations
-    """
-    if method not in {'point_process', 'random_walk'}:
-        raise ValueError("method must be one of {'point_process','random_walk'}")
-    if method == 'point_process':
-        points = point_process(map_=map_,num_samples=num_samples,start=start,end=end,**method_args)    
-    else:
-        points = random_walk(map_=map_,num_samples=num_samples,start=start,end=end,**method_args)    
-    
-    
+    Observations
+    """ 
+
+    points = point_process(map_,bounds,start,end,num_samples,cluster,cluster_args,receiver_offset)    
     observations = simulate_observations(map_, points,set(['C','E','G','R']),**samplings_args)
     return observations
 
@@ -136,121 +133,106 @@ def sample(observations: Observations,SSLB:float=10, mu_:float=35,msr_noise:floa
     
     return obs.convert_dtypes()
 
+def point_process(map_:Map, bounds:np.array, start:pd.Timestamp,end:pd.Timestamp, num_samples:int,cluster:str='none',cluster_args:dict=dict(),receiver_offset:float=1.0) -> ReceiverPoints:
+    """Generates a set of receiver locations using a clustered point process.
 
-def _xy_point_process(map_:Map,polygon:Polygon,num_samples:int) ->gpd.GeoSeries:
-    """ Generates a geoseries of (2d) points outside map_ buildings and inside polygon"""
-    minx, miny, maxx, maxy = polygon.bounds
-    xy = np.empty(shape=(0,2),dtype=float)
-    n = num_samples - xy.shape[0]
+    Each cluster represents a set of receiver measurements. Child process can vary (none,random or levy walk, or a guided walk)
+    Receiver locations are only returned if outside of buildings.
 
-    while n > 0:
-        p = _rng.random((n,2)) * np.array([[maxx-minx,maxy-miny]]) + np.array([[minx,miny]]) 
-        points=gpd.GeoSeries(gpd.points_from_xy(p[:,0],p[:,1]),crs=map_.crs)
-        outside = p[is_outside(map_,points,polygon),:]
-        xy= np.vstack((xy,outside))
-        n = num_samples - xy.shape[0]
-
-    return gpd.GeoSeries(gpd.points_from_xy(xy[:,0],xy[:,1]),crs=map_.crs)
-
-
-def point_process(map_:Map, num_samples:int, start:pd.Timestamp,end:pd.Timestamp, polygon: Polygon = Polygon(), receiver_offset:float=1.0) -> ReceiverPoints:
-    """ Generates a set of receiver locations using a random point process.
-
-    Receiver locations are within the map boundaries and outside of buildings. 
-    
     Parameters
     ----------
-    map_ : gpd.GeoDataFrame
-        A gnssmapper map
-    num_samples : int
-        number of receiver locations to generate
+    map_ : Map
+    bounds : np.array
+        spatial bounds with minx,miny,maxx,maxy format
     start : pd.Timestamp
-        start boundary for observation time.
+        lower time bound
     end : pd.Timestamp
-        end boundary for observation time.
-    polygon : Polygon, optional
-        A bounding polygon, by default empty.
+        upper time bound
+    num_samples : int
+        number of receivers (parent process) to simulate 
+    cluster_args : dict
+        passed to clustering (child) process, by default dict().
+    cluster : str, optional
+        type of child process, by default 'none'
     receiver_offset : float, optional
         The altitude of receiver location above ground level, by default 1.0
 
     Returns
     -------
-    gpd.GeoDataFrame
-        Receiverpoints
-
+    ReceiverPoints
     """
     cm.check.check_type(map_,'map',raise_errors=True)
-
-    if num_samples <= 0:
-        return gpd.GeoDataFrame()
-
-    if polygon.is_empty:
-        polygon= box(*map_.geometry.total_bounds)
-
-    xy = _xy_point_process(map_, polygon, num_samples)
-    z = ground_level(map_,xy) + receiver_offset
-    t = start + (end-start) * pd.Series(_rng.random(num_samples))
-    return gpd.GeoDataFrame({'time':t},geometry=gpd.points_from_xy(xy.x,xy.y,z),crs=xy.crs)
-
-def random_walk(map_:Map, num_samples: int, start:pd.Timestamp,end:pd.Timestamp, polygon: Polygon = Polygon(), receiver_offset:float=1., avg_speed: float = .1, sampling_rate: int = 5) ->ReceiverPoints:
-    """Generates a set of receiver locations using a random point process.
-
-    Receiver locations are within the map boundaries and outside of buildings.
-
-    Parameters
-    ----------
-    map_ : gpd.GeoDataFrame
-        A gnssmapper map
-    num_samples : int
-        number of receiver locations to generate
-    start : pd.Timestamp
-        start boundary for observation time.
-    end : pd.Timestamp
-        end boundary for observation time.
-    polygon : Polygon, optional
-        A bounding polygon, by default empty.
-    receiver_offset : float, optional
-        The altitude of receiver location above ground level, by default 1.0
-    avg_speed : float, optional
-        speed of random walk per second, by default .1
-    sampling_rate : int, optional
-        frequency of readings in seconds, by default 5
-
-    Returns
-    -------
-    gpd.GeoDataFrame
-        Receiverpoints
-    """
+    xy,t = _poisson_cluster(bounds,start,end,num_samples,cluster,cluster_args)
+    points=gpd.GeoSeries(gpd.points_from_xy(xy[0,:],xy[1,:]),crs=map_.crs)
+    outside = is_outside(map_,points,box(*bounds))
+    z = ground_level(map_,points[outside]) + receiver_offset
     
-    if num_samples <= 0:
-        return gpd.GeoDataFrame()
+    return gpd.GeoDataFrame({'time':t[outside]},geometry=gpd.points_from_xy(xy[0,outside],xy[1,outside],z),crs=map_.crs)
 
-    if polygon.is_empty:
-        polygon= box(*map_.geometry.total_bounds)
 
-    starting_point = _xy_point_process(map_,polygon,1)
-    x, y, s = [starting_point.x[0]], [starting_point.y[0]], [0]
-    tempx, tempy, temps = x[-1], y[-1], s[-1]
+def _poisson_cluster(bounds:np.array, start:pd.Timestamp,end:pd.Timestamp, num_samples:int,cluster:str,cluster_args:dict) -> tuple:
+    """ Generates a set of locations using a poisson cluster process."""
+    
+    if cluster not in ['none','random','levy','guided']:
+        raise ValueError('cluster must be one of none,random,levy','guided')
 
-    while len(x) != num_samples:
-        orientation = _rng.uniform(0,2 * np.pi)
-        x_ = avg_speed * np.cos(orientation)
-        y_ = avg_speed * np.sin(orientation)
-        p = gpd.GeoSeries(Point(tempx + x_, tempy + y_),crs=map_.crs)
-        if p.within(polygon)[0]:
-            tempx += x_
-            tempy += y_
-            temps += 1
-            if temps%sampling_rate == 0 and is_outside(map_,p)[0]:
-                x.append(tempx)
-                y.append(tempy)
-                s.append(temps)
+    parent_xy = _poisson_point(bounds,num_samples)
+    parent_time = start + (end-start) * uniform.rvs(size=(num_samples,))
+    if cluster=='none':
+        return np.array([parent_xy[0,:],parent_xy[1,:]]),parent_time
+    elif cluster in ['random','levy']:
+        length = cluster_args["duration"].astype('timedelta64[s]').astype(np.int64)
+        durations = np.ceil(expon.rvs(size=(num_samples,),scale=length)).astype(np.int64)
+        xy =np.concatenate(
+            [_walk(parent_xy[:,i], d, cluster, cluster_args['speed']) for i,d in enumerate(durations)],
+            axis=1)
+        time= np.concatenate([
+            t+np.array(range(0,d)).astype('timedelta64[s]') for t,d in zip(parent_time,
+                                                                          durations)
+                                                                          
+        ])
+    else:
+        xy_list =[_guided_walk(parent_xy[:,i], cluster_args["endpoint"], cluster_args['speed']) for i in range(num_samples)]
+        durations = [x.shape[1] for x in xy_list]
+        xy = np.concatenate(xy_list,axis=1)
+        time = np.concatenate([
+            t+np.array(range(0,d)).astype('timedelta64[s]') for t,d in zip(parent_time,
+                                                                          durations)
+                                                                          
+        ])
+    return np.array([xy[0,:],xy[1,:]]),time
 
-    xy = gpd.GeoSeries(gpd.points_from_xy(x,y),crs=map_.crs)
-    z = ground_level(map_,xy) + receiver_offset
 
-    time_range = (end - start).total_seconds()
-    bounded_s = pd.to_timedelta(np.mod(s,time_range),unit='S')
-    t = start + bounded_s
-    return gpd.GeoDataFrame({'time':t},geometry=gpd.points_from_xy(xy.x,xy.y,z),crs=xy.crs)
+def _walk(starting_point:np.array,steps:int,type:str,speed:float)-> np.array:
+    """ Generates a series of 2d points following walk process"""
+    if type not in ['levy','random']:
+        raise ValueError('walk type must be levy or random')
+    if type=='levy':
+        l = levy.rvs(size=(steps,),scale=speed)
+    if type=='random':
+        l = np.ones((steps,))*speed
+    angle = uniform.rvs(size=(steps,),scale=2*np.pi)
+    x = starting_point[0] + np.cumsum(l*np.cos(angle))
+    y = starting_point[1] + np.cumsum(l*np.sin(angle))
+    return np.array([x,y])
+
+def _poisson_point(bounds:np.array,num_samples:int) ->np.array:
+    """ Generates a series of 2d points following homogenous poisson process"""
+    minx, miny, maxx, maxy = bounds
+    x = minx+uniform.rvs(size=(num_samples,),scale=maxx-minx)
+    y = miny+uniform.rvs(size=(num_samples,),scale=maxy-miny)
+
+    return np.array([x,y])
+
+def _guided_walk(starting_point:np.array,end_point:np.array,speed:float)-> np.array:
+    """ Generates a series of 2d points going straght to end point"""
+    dx = end_point[0] - starting_point[0]
+    dy = end_point[1] - starting_point[1]
+    distance = np.sum((np.array(end_point)-np.array(starting_point))**2)**0.5 
+    steps = np.ceil(distance/speed).astype('int64')
+    x = starting_point[0] +np.cumsum(np.ones((steps,))*(speed*dx/distance))
+    y = starting_point[1] +np.cumsum(np.ones((steps,))*(speed*dy/distance))
+    x[-1]=end_point[0]
+    y[-1]=end_point[1]
+    return np.array([x,y])
 
