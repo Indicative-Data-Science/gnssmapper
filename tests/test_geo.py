@@ -7,6 +7,7 @@ import pygeos
 import pyproj
 import geopandas as gpd
 import shapely.wkt
+import pygeos
 import numpy.testing as npt
 
 import gnssmapper.common as cm
@@ -15,8 +16,8 @@ import gnssmapper.geo as geo
 
 class TestObservationMethods(unittest.TestCase):
     def setUp(self):
-        self.rays = gpd.GeoSeries([shapely.geometry.LineString([[527990, 183005, 0], [528020, 183005, 15]]),
-                                       shapely.geometry.LineString([[527990, 183005, 10], [528020, 183005, 25]])],
+        self.rays = gpd.GeoSeries([pygeos.linestrings([[527990, 183005, 0], [528020, 183005, 15]]),
+                                       pygeos.linestrings([[527990, 183005, 10], [528020, 183005, 25]])],
                                         crs="epsg:27700")
     def test_rays(self) -> None:
         r = [[0, 0, 0], [1, 1, 1]]
@@ -39,38 +40,38 @@ class TestObservationMethods(unittest.TestCase):
 
 class TestShapelyMethods(unittest.TestCase):
     def setUp(self):
-        self.building = shapely.wkt.loads("POLYGON((528010 183010, 528010 183000,528000 183000, 528000 183010,528010 183010))")
+        self.building = pygeos.box(528000,183000,528010,183010)
        
     def test_intersection(self):
-        five = shapely.geometry.LineString([[527990,183005,0],[528020,183005,15]]) 
+        five = pygeos.linestrings([[527990,183005,0],[528020,183005,15]]) 
         point = geo.intersection([five],[self.building],[10])
-        self.assertAlmostEqual(np.array(point[0])[2],5)
+        self.assertAlmostEqual(pygeos.get_coordinates(point,include_z=True)[0,2],5)
 
     def test_intersection_projected(self):
-        fifteen = shapely.geometry.LineString([[527990,183005,10],[528020,183005,25]])
+        fifteen = pygeos.linestrings([[527990,183005,10],[528020,183005,25]])
         point = geo.intersection_projected([fifteen], [self.building])
-        npt.assert_array_almost_equal(np.array(list(point)[0].coords).flatten(), [528000, 183005, 15])
+        npt.assert_array_almost_equal(pygeos.get_coordinates(point,include_z=True)[0,:], [528000, 183005, 15])
 
-        inside = shapely.geometry.LineString([[528005,183005,10],[528020,183005,25]])
+        inside = pygeos.linestrings([[528005,183005,10],[528020,183005,25]])
         inside_point = geo.intersection_projected([inside], [self.building])
-        npt.assert_array_almost_equal(np.array(list(inside_point)[0].coords).flatten(), [528010, 183005, 15])
+        npt.assert_array_almost_equal(pygeos.get_coordinates(inside_point,include_z=True)[0,:], [528010, 183005, 15])
 
-        outside = shapely.geometry.LineString([[527990,183015,10],[528020,183015,25]])
+        outside = pygeos.linestrings([[527990,183015,10],[528020,183015,25]])
         outside_point = geo.intersection_projected([outside], [self.building])
-        self.assertTrue(list(outside_point)[0].is_empty)
-        empty = shapely.geometry.LineString()
+        self.assertTrue(pygeos.is_empty(outside_point)[0])
+        empty = pygeos.Geometry("LINESTRING EMPTY")
         empty_point = geo.intersection_projected([empty], [self.building])
-        self.assertTrue(list(empty_point)[0].is_empty)
+        self.assertTrue(pygeos.is_empty(empty_point)[0])
 
 
     def test_intersection_projected_height(self):
-        fifteen = shapely.geometry.LineString([[527990,183005,10],[528020,183005,25]])
+        fifteen = pygeos.linestrings([[527990,183005,10],[528020,183005,25]])
         point = geo.intersection_projected_height([fifteen],[self.building])
         self.assertAlmostEqual(point[0],15)
 
     def test_intersects(self):
-        five = shapely.geometry.LineString([[527990, 183005, 0], [528020, 183005, 15]])
-        fifteen = shapely.geometry.LineString([[527990, 183005, 10], [528020, 183005, 25]])
+        five = pygeos.linestrings([[527990, 183005, 0], [528020, 183005, 15]])
+        fifteen = pygeos.linestrings([[527990, 183005, 10], [528020, 183005, 25]])
         rays = [five, fifteen]
         buildings = [self.building, self.building]
         heights=[10,10]
@@ -79,7 +80,7 @@ class TestShapelyMethods(unittest.TestCase):
 
 class TestFresnel(unittest.TestCase):
     def setUp(self):
-        self.buildings = [shapely.wkt.loads("POLYGON((528010 183010, 528010 183000,528000 183000, 528000 183010,528010 183010))")]
+        self.buildings = pygeos.box(52800,183000,528010,183010)
 
     def test_fresnel_integral(self):
         v=np.array([-1,0,1,2.4])
@@ -87,13 +88,13 @@ class TestFresnel(unittest.TestCase):
         npt.assert_almost_equal(geo.fresnel_integral(v),o)
 
     def test_fresnel_parameter(self):
-        five = shapely.geometry.LineString([[527990,183005,5],[528020,183005,5]]) 
-        point = shapely.geometry.Point([528000,183005,7])
+        five = pygeos.linestrings([[527990,183005,5],[528020,183005,5]]) 
+        point = pygeos.points([528000,183005,7])
         expected= 2 *( 2 / (0.1903 * 10))**0.5
         self.assertAlmostEqual(geo.fresnel_parameter([five],[point])[0],expected)
 
     def test_get_fresnel_single(self):
-        five = shapely.geometry.LineString([[527990,183005,0],[528020,183005,15]]) 
+        five = pygeos.linestrings([[527990,183005,0],[528020,183005,15]]) 
         expected=geo.fresnel_integral([5 *( 2 / (0.1903 * 10))**0.5])
         self.assertAlmostEqual(geo.get_fresnel(five,self.buildings,[10]),expected[0])
 
@@ -105,16 +106,16 @@ class TestFresnel(unittest.TestCase):
 class TestMapMethods(unittest.TestCase):
     def setUp(self):
         self.map_box = gpd.GeoDataFrame({'height': [10]},
-            geometry=[shapely.wkt.loads("POLYGON((528010 183010, 528010 183000,528000 183000, 528000 183010,528010 183010))")],
+            geometry=[pygeos.box(528000,183000,528010,183010)],
             crs="epsg:27700",index=[1])
         self.map_canyon =gpd.GeoDataFrame({'height': [10,10]},
-            geometry=list(shapely.wkt.loads("MULTIPOLYGON(((528010 183010, 528010 183000,528000 183000, 528000 183010,528010 183010)),((528030 183010, 528030 183000,528020 183000, 528020 183010,528030 183010)))")),
+            geometry=[pygeos.box(528000,183000,528010,183010),pygeos.box(528020,183000,528030,183010)],
             crs="epsg:27700",index=[3,4])
-        self.rays_box = gpd.GeoSeries([shapely.geometry.LineString([[527990, 183005, 0], [528020, 183005, 15]]),
-                                       shapely.geometry.LineString([[527990, 183005, 10], [528020, 183005, 25]])],
+        self.rays_box = gpd.GeoSeries([pygeos.linestrings([[527990, 183005, 0], [528020, 183005, 15]]),
+                                       pygeos.linestrings([[527990, 183005, 10], [528020, 183005, 25]])],
                                         crs="epsg:27700",index=[1,2])
-        self.rays_canyon = gpd.GeoSeries([shapely.geometry.LineString([(527990, 183005, 5), (528015, 183005, 5)]),
-                                          shapely.geometry.LineString([(528015, 183005, 9), (528035, 183005, 9)])],
+        self.rays_canyon = gpd.GeoSeries([pygeos.linestrings([(527990, 183005, 5), (528015, 183005, 5)]),
+                                          pygeos.linestrings([(528015, 183005, 9), (528035, 183005, 9)])],
                                         crs="epsg:27700",index=[1,2])
 
     def test_map_to_crs(self):

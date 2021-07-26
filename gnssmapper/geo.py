@@ -34,6 +34,15 @@ def z(points: gpd.GeoSeries) -> pd.Series:
     """Returns Z coordinate for a set of point geometries """
     return pd.Series((point.z for point in points), index=points.index)
 
+def pygeos_z(points) ->np.array:
+    """Returns Z coordinate for a set of pygeos point geometries """
+    out= np.ones_like(points)
+    out[:]=np.nan
+    out[~pygeos.is_empty(points)]=pygeos.get_coordinates(points,include_z=True)[:,2]
+    out=out.astype('float64')
+    return out
+
+
 
 def to_crs(df: Union[gpd.GeoDataFrame, gpd.GeoSeries], target: pyproj.crs.CRS) -> Union[gpd.GeoDataFrame, gpd.GeoSeries]:
     """Reproject 3D geometry to target CRS. Assumes XY axis order.
@@ -178,10 +187,10 @@ def is_los(map_, rays: gpd.GeoSeries) -> pd.Series:
 
     los = np.ones((len(rays),), dtype=bool)
 
-    for building, height in zip(map_.geometry, map_.height):
+    for building, height in zip(map_.geometry.array.data, map_.height):
         idx = los == True
         n = sum(idx)
-        los[idx] = intersects(list(compress(rays, idx)), [
+        los[idx] = intersects(list(compress(rays.geometry.array.data, idx)), [
             building]*n, np.ones(n,)*height)
 
     return pd.Series(los, index=rays.index)
@@ -222,8 +231,8 @@ def projected_height(map_, rays: gpd.GeoSeries) -> pd.DataFrame:
     """
 
     rays_ = to_crs(rays, map_.crs)
-    b = chain(*repeat(map_.geometry, len(rays_)))
-    r = chain(*zip(*repeat(rays_, len(map_.geometry))))
+    b = list(chain(*repeat(map_.geometry.array.data, len(rays_))))
+    r = list(chain(*zip(*repeat(rays_.array.data, len(map_.geometry)))))
 
     heights = intersection_projected_height(r, b)
     heights = heights.reshape((-1, len(map_.geometry)))
@@ -268,29 +277,27 @@ def intersection_projected(rays, buildings):
     """ 3d intersection point between rays and buildings (always the lowest height and assuming buildings have nonbounded heights). Empty Point if no intersection
     Parameters
     ----------
-    rays : (n) shapely LineStrings (3d) 
+    rays : n pygeos LineStrings (3d) 
 
-    buildings : (n) polygons (2d) 
+    buildings : n polygons (2d) 
 
     Returns
     -------
-    Points: (n) shapely Points (3d) 
+    Points: n pygeos Points (3d) 
 
     """
 
-    intersections = (building.exterior & ray for building,
-                     ray in zip(buildings, rays))
+    e=pygeos.get_exterior_ring(buildings)
+    intersections=pygeos.intersection(e,rays)
 
     def lowest(points):
-        if points.geom_type == 'Point':
-            return points
-        # coords = np.asarray(points)
-        # # lowest = np.nonzero(coords[:, 2] == min(coords[:, 2]))
-        # lowest = np.argmin(coords[:, 2]
-        # return points[lowest]
-        return min(points, key=lambda x: x.z)
+        c=pygeos.get_coordinates(points,include_z=True)
+        return pygeos.points(min(c, key=lambda x: x[2]))
 
-    return (points if points.is_empty else lowest(points) for points in intersections)
+    intersections[~pygeos.is_empty(intersections)]=[lowest(p) for p in intersections[~pygeos.is_empty(intersections)]]
+    intersections[pygeos.is_empty(intersections)]=pygeos.Geometry("POINT EMPTY")
+
+    return intersections
 
 
 def intersection(rays, buildings, heights):
@@ -309,7 +316,10 @@ def intersection(rays, buildings, heights):
     Points: [n] shapely Points (3d)   
     """
     points = intersection_projected(rays, buildings)
-    return [shapely.geometry.Point() if not p.is_empty and (p.z > h) else p for p, h in zip(points, heights)]
+    z=pygeos_z(points)
+    out=points.copy()
+    out[z>heights]=pygeos.Geometry("POINT EMPTY")
+    return out
 
 
 def intersects(rays, buildings, heights):
@@ -329,16 +339,17 @@ def intersects(rays, buildings, heights):
 
     """
     points = intersection_projected(rays, buildings)
-    return np.array([not p.is_empty and p.z <= h for p, h in zip(points, heights)])
+    z=pygeos_z(points)
+    return z<=heights
 
 
 def intersection_projected_height(rays, buildings):
     """
     Parameters
     ----------
-    rays : (n) shapely LineStrings (3d)
+    rays : n pygeos LineStrings (3d) 
 
-    buildings : (n) polygon 2d
+    buildings : n polygons (2d) 
 
     Returns
     -------
@@ -346,8 +357,11 @@ def intersection_projected_height(rays, buildings):
         height at which observation intersects building. Nan if no intersection
 
     """
+
     points = intersection_projected(rays, buildings)
-    return np.array([np.nan if p.is_empty else p.z for p in points])
+
+    return pygeos_z(points)
+
 
 
 def get_fresnel(ray, buildings, heights):
