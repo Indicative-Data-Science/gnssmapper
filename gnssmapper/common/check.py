@@ -3,18 +3,15 @@
 Objects {rays, receiver_points, observations, maps} are special geoDataFrames.
 Not implemented as classes because of the difficulty of subclassing Pandas dataframes.
 """
+import warnings
 from typing import NewType
 from typing import Union, Set
-import warnings
-
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import pygeos
 import pyproj.crs
-
-from gnssmapper.common.constants import supported_constellations
+import shapely
 
 Rays = NewType('Rays', gpd.GeoSeries)
 ReceiverPoints = NewType('ReceiverPoints', gpd.GeoDataFrame)
@@ -31,7 +28,7 @@ def _rays(obj: Rays) -> dict:
             'Expecting Linestrings': not obj.geom_type.eq("LineString").all(),
             'Missing z coordinates': not obj.has_z.all(),
             'More than 2 points in Linestring': np.not_equal(
-                pygeos.count_coordinates(obj.array.data),
+                shapely.count_coordinates(obj.array.data),
                 2 * len(obj)).any(),
         }
 
@@ -117,12 +114,12 @@ def _infer_type(obj) -> str:
         if obj[0, ].geomtype == "Polygon":
             return 'map_' if check_type(obj, 'map_') else None
 
-    return None
+    return "None"
 
 
 def _raise(tests: dict) -> None:
     errors = [k for k, v in tests.items() if v]
-    if errors != []:
+    if errors:
         text = ', '.join(errors)
         raise AttributeError(text)
     return None

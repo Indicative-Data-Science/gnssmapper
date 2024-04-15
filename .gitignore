@@ -3,7 +3,11 @@ dist
 build
 dist/
 build/
+venv/
 gnssmapper.egg-info/
+*.iml 
+.idea
+**/__pycache__
 
 # Ignore document build
 docs/_build/

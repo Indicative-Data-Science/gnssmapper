@@ -5,7 +5,8 @@ import pandas as pd
 import pandas.testing as pt
 import geopandas as gpd
 import shapely.wkt
-from pygeos import Geometry
+from shapely import linestrings, points
+
 
 import gnssmapper.common.check as check
 import gnssmapper.common.constants as cn
@@ -13,8 +14,9 @@ import gnssmapper.common.constants as cn
 
 class TestCheck(unittest.TestCase):
     def setUp(self):
-        line = Geometry("LineString(0 0 0, 1 2 3)")
-        point = Geometry("Point(0 0 0)")
+        line = linestrings([[[0,0,0], [1,2,3]]])[0]
+        point = points([[0,0,0]])[0]
+
         self.rays = gpd.GeoSeries([line] * 4, crs=cn.epsg_wgs84_cart)
         self.points = gpd.GeoSeries([point] * 4, crs=cn.epsg_wgs84_cart)
         self.d = {

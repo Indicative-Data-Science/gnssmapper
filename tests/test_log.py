@@ -1,5 +1,5 @@
 """Unittests for the functions in raw, using example datasets."""
-
+import os.path
 import unittest
 import pandas.testing as pt
 import pandas as pd
@@ -11,8 +11,9 @@ import gnssmapper.common.constants as cn
 
 class TestReadCSV(unittest.TestCase):
     def setUp(self):
-        self.filedir = "./tests/data/"
-        self.filepath = self.filedir+"log_20200211.txt"
+        THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.filedir = "data/"
+        self.filepath = os.path.join(THIS_DIR,self.filedir,"log_20200211.txt")
 
     def test_read_csv_(self) -> None:
         raw_var,fix = log.read_csv_(self.filepath)
@@ -146,8 +147,11 @@ class TestProcessRaw(unittest.TestCase):
 
 class TestNA(unittest.TestCase):
     def setUp(self):
-        self.filedir = "./tests/data/"
-        self.filepath = self.filedir+"missing.txt"
+        THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.filedir = "data/"
+        self.filepath = os.path.join(THIS_DIR,self.filedir,"missing.txt")
+
+        self.assertTrue(os.path.exists(self.filepath))
 
     def test_datatype(self) -> None:
         raw_var, fix = log.read_csv_(self.filepath)
