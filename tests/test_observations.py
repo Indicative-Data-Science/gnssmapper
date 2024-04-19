@@ -6,6 +6,7 @@ import numpy as np
 import numpy.testing as npt
 import pandas as pd
 import geopandas as gpd
+import shapely
 import geopandas.testing as gpt
 
 import pyproj
@@ -40,9 +41,9 @@ class TestObservations(unittest.TestCase):
     def test_elevation(self) -> None:
         # 111319.458metres = 1 degree of longtitude  at 0 degrees latitude
         #expecting 45 degree elevation
-        geometry = [pygeos.Geometry("LineString (0 0 0,0.01 0  1113.19458)"),
-                    pygeos.Geometry("LineString (45 0 0,45.01 0 1113.19458)"),
-                    pygeos.Geometry("LineString (90 0 0,90.01 0 1113.19458)")]
+        geometry = [shapely.LineString([ [0, 0, 0],[0.01, 0,  1113.19458]]),
+                    shapely.LineString([[45, 0, 0],[45.01, 0, 1113.19458]]),
+                    shapely.LineString([[90,0 ,0],[90.01,0,1113.19458]])]
         lines = gpd.GeoSeries(geometry, crs=cm.constants.epsg_wgs84)
         self.assertTrue(np.all(44<observations.elevation(lines)) and np.all(46>observations.elevation(lines)))
 

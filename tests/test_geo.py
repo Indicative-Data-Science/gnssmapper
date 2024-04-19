@@ -110,8 +110,8 @@ class TestMapMethods(unittest.TestCase):
     def setUp(self):
         self.map_box = gpd.GeoDataFrame({'height': [10]},
                                         geometry=[
-                                            shapely.wkt.loads("POLYGON((528010 183010, 528010 183000,528000 183000,"
-                                                              " 528000 183010,528010 183010))")
+                                            shapely.normalize( shapely.wkt.loads("POLYGON((528010 183010, 528010 183000,528000 183000,"
+                                                              " 528000 183010,528010 183010))"))
                                             ],
                                         crs="epsg:27700", index=[2])
         self.map_canyon = gpd.GeoDataFrame({'height': [10, 10]},
@@ -135,6 +135,9 @@ class TestMapMethods(unittest.TestCase):
         pdt.assert_frame_equal(self.map_box, same, check_dtype=False)
         reverted = geo.map_to_crs(output, "epsg:27700")
         reverted = reverted.set_geometry(shapely.set_precision(reverted.geometry.array.data, 1))
+
+        # make sure the coordinates are in the same order for similarity chFeck
+        reverted.geometry = shapely.normalize(reverted.geometry)
         pdt.assert_frame_equal(self.map_box, reverted, check_dtype=False, atol=0.1, rtol=0.1)
 
     def test_is_outside(self):

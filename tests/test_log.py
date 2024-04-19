@@ -172,8 +172,10 @@ class TestNA(unittest.TestCase):
 
 class TestJoinReceiverPosition(unittest.TestCase):
     def setUp(self):
-        self.filedir = "./tests/data/"
-        self.filepath = self.filedir+"log_20200211.txt"
+        THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.filedir = "data/"
+        self.filepath = os.path.join(THIS_DIR,self.filedir,"log_20200211.txt")
+
         raw_var, fix = log.read_csv_(self.filepath)
         self.gnss_obs = log.process_raw(raw_var[0:50])
         self.gnss_fix=fix[0:1]

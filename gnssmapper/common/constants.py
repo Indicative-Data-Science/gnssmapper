@@ -111,6 +111,8 @@ lightspeed = 299792458
 
 """ GPS and UTC conversion"""
 nanos_in_day = 86400 * 10**9
+nanos_in_minute = 60 * 10**9
+nanos_in_second = 10 ** 9
 
 # starting epoch for gps
 gps_epoch = pd.to_datetime('1980-01-06', format="%Y-%m-%d")
