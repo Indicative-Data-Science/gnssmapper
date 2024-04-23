@@ -15,9 +15,12 @@ from gnssmapper.algo.main import _heights, prepare_data, fit
 class TestMapAlgorithm(unittest.TestCase):
     def setUp(self):
         self.map_ = gpd.GeoDataFrame({'height': [10, 10]},
-                                     geometry=list(shapely.wkt.loads(
-                                         "MULTIPOLYGON(((528010 183010, 528010 183000,528000 183000, 528000 183010,528010 183010)),"
-                                         "((528030 183010, 528030 183000,528020 183000, 528020 183010,528030 183010)))")),
+                                     geometry=[
+                                         shapely.wkt.loads("POLYGON((528010 183010, 528010 183000,528000 183000, "
+                                                           "528000 183010,528010 183010))"),
+                                         shapely.wkt.loads("POLYGON((528030 183010, 528030 183000,528020 183000, "
+                                                           "528020 183010,528030 183010))")
+                                     ],
                                      crs="epsg:27700", index=[3, 4])
         rays = gpd.GeoSeries([shapely.geometry.LineString([(527990, 183005, 5), (528015, 183005, 5)]),
                               shapely.geometry.LineString([(528015, 183005, 10), (528035, 183005, 10)])],

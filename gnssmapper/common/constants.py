@@ -111,6 +111,7 @@ lightspeed = 299792458
 
 """ GPS and UTC conversion"""
 nanos_in_day = 86400 * 10**9
+nanos_in_year = 315576 * 10 ** 11
 nanos_in_minute = 60 * 10**9
 nanos_in_second = 10 ** 9
 

@@ -6,7 +6,8 @@ import numpy as np
 
 INT_64 = pd.Int64Dtype()
 
-from gnssmapper.common.constants import gps_epoch, leap_seconds, nanos_in_day, nanos_in_minute, nanos_in_second
+from gnssmapper.common.constants import gps_epoch, leap_seconds, nanos_in_day, nanos_in_minute, nanos_in_second, \
+    nanos_in_year
 
 
 def gps_to_utc(time: pd.Series) -> pd.Series:
@@ -23,13 +24,12 @@ def gps_to_utc(time: pd.Series) -> pd.Series:
 
 def utc_to_gps(time: pd.Series) -> pd.Series:
     """Converts utc datetime into nanos since gps epoch."""
-    print(f"{time.array=}")
+
     print(f"{pd.to_timedelta(leap_seconds(time), unit='s', errors='coerce')=}")
-    print(f"{gps_epoch=}")
     delta = (time.array
              + pd.to_timedelta(leap_seconds(time), unit='s', errors='coerce')
              - gps_epoch)
-    print(f"{delta=}")
+
     return utc_to_int(delta)
 
 
@@ -79,14 +79,17 @@ def gpsweek_to_gps(
 
 
 def utc_to_int(time: pd.Series) -> pd.Series:
-    """ Turns a timestamp into number of nanoseconds (propogates NaT values) """
-
-    ret = pd.Series(
-        (time.array.days.astype('int64') * nanos_in_day) +
-        (time.array.seconds.astype('int64') * 10 ** 9) +
-        time.array.nanoseconds, dtype=INT_64,
-        index=time.index, name=time.name).where(time.notna(), pd.NA).astype(INT_64)
-
+    """ Turns a timestamp into number of nanoseconds (propagates NaT values) """
+    if isinstance(time.array, pd.arrays.TimedeltaArray):
+        ret = pd.Series(
+            (time.array.days.astype('int64') * nanos_in_day) +
+            (time.array.seconds.astype('int64') * 10 ** 9) +
+            time.array.nanoseconds, dtype=INT_64,
+            index=time.index, name=time.name).where(time.notna(), pd.NA).astype(INT_64)
+    elif isinstance(time.array, pd.arrays.DatetimeArray):
+       ret = pd.to_datetime(time).where(time.notna(), pd.NA).astype(int)
+    else:
+        raise Exception("wasn't expecting to process a " + time.array)
     return ret
 
 

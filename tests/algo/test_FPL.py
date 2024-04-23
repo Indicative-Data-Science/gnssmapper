@@ -57,9 +57,9 @@ class TestFPL(unittest.TestCase):
 
         theta = self.fpl.param
 
-        def neg_log_likelihood(theta, X, y):
+        def neg_log_likelihood(theta_, X, y):
             m = X.shape[0]
-            yhat = theta[3] + (theta[0] - theta[3]) * expit(theta[1] * (X - theta[2]))
+            yhat = theta_[3] + (theta_[0] - theta_[3]) * expit(theta_[1] * (X - theta_[2]))
             return -(1 / m) * np.sum(y * np.log(yhat) + (1 - y) * np.log(1 - yhat))
 
         min_ = neg_log_likelihood(theta, X, Y)
@@ -70,6 +70,7 @@ class TestFPL(unittest.TestCase):
         D = np.arange(0 + 1e-3, 0.5 - 1e-3, 0.1)
 
         likelihoods = [neg_log_likelihood([a, b, c, d], X, Y) for a, b, c, d in product(A, B, C, D)]
+        # This seems to fail every other time it is run !!!!!
         self.assertLessEqual(min_, min(likelihoods))
 
     def test_prob(self) -> None:

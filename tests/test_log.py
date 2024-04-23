@@ -183,9 +183,9 @@ class TestJoinReceiverPosition(unittest.TestCase):
     def test_joining(self) -> None:
         epoch = self.gnss_obs[0:35]
         result = log.join_receiver_position(epoch, self.gnss_fix)
-        self.assertEqual(len(result), 35)
-        self.assertEqual(result.time.nunique(), 1)
-        self.assertEqual(result.Longitude.nunique(), 1)
+        self.assertEqual(35, len(result))
+        self.assertEqual(1, result.time.nunique())
+        self.assertEqual(1, result.Longitude.nunique())
     
     def test_warning_on_drop(self) -> None:
         self.assertWarnsRegex(UserWarning,

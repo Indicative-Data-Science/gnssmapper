@@ -196,8 +196,9 @@ def process_raw(gnss_raw: pd.DataFrame) -> pd.DataFrame:
     tx = tx + cm.constants.leap_seconds(cm.time.gps_to_utc(tx)
                                         ).where(constellation == 'R', 0) * 10**9
 
-    # This will fail if the rx and tx are in seperate weeks
+    # This will fail if the rx and tx are in separate weeks
     # add code to remove a week if failed
+
     check_ = rx > tx
     if not check_.all():
         warnings.warn(
@@ -257,6 +258,8 @@ def join_receiver_position(
     clean_fix["(UTC)TimeInMs"] = clean_fix["(UTC)TimeInMs"].astype('int64')
     clean_obs = gnss_obs.dropna(subset=["time_ms"]).sort_values("time_ms")
     clean_obs["time_ms"] = clean_obs["time_ms"].astype('int64')
+    print(f"{clean_fix['(UTC)TimeInMs']=}")
+    print(f"{clean_obs['time_ms']=}")
     df = pd.merge_asof(clean_obs, clean_fix, left_on="time_ms", right_on="(UTC)TimeInMs", suffixes=[
                        "obs", "fix"], tolerance=cm.constants.join_tolerance_ms, direction='nearest')
     df.dropna(subset=["(UTC)TimeInMs"], inplace=True)
