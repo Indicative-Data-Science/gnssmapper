@@ -1,21 +1,12 @@
 """ This module provides file read and write capabilities for gnssmapper objects.
     Currently unused! - just use the geopandas methods and tweak datatypes on loading...
 """
-from typing import Union, Set, final
-import warnings
-
 
 import geopandas as gpd
-import numpy as np
-import pandas as pd
-import pygeos
-import pyproj.crs
-
-from gnssmapper.common.constants import supported_constellations
 
 
 def to_file(df, filename, driver="GPKG", schema=None, index=None, **kwargs):
-    """ Write the ``GeoDataFrame`` to a file.
+    """Write the ``GeoDataFrame`` to a file.
 
     By default, a GeoPackage file is written, but any OGR data source
     supported by Fiona can be written. Support for datetime fields varies between drivers.
@@ -60,15 +51,14 @@ def to_file(df, filename, driver="GPKG", schema=None, index=None, **kwargs):
     # check if datframe of specific type
 
     data.to_file()
+    final = {}
 
-    final['Cn0DbHz'] = final['Cn0DbHz'].astype(
-        'float64')  # otherwise won't write)
-    final['time'] = final.time.astype('datetime64[s]')
-
+    final["Cn0DbHz"] = final["Cn0DbHz"].astype("float64")  # otherwise won't write)
+    final["time"] = final.time.astype("datetime64[s]")
 
 
 def read_file(filename, bbox=None, mask=None, rows=None, **kwargs):
-    """ Returns a GeoDataFrame from a file or URL and checks type against gnssmapper objects.
+    """Returns a GeoDataFrame from a file or URL and checks type against gnssmapper objects.
 
     Parameters
     ----------
@@ -96,6 +86,5 @@ def read_file(filename, bbox=None, mask=None, rows=None, **kwargs):
     """
 
     output = gpd.read_file(filename, bbox=bbox, mask=mask, rows=rows, **kwargs)
-
 
     return output

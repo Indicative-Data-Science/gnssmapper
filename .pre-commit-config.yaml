@@ -1,0 +1,24 @@
+repos:
+    -   repo: https://github.com/asottile/pyupgrade
+        rev: v3.15.0
+        hooks:
+        -   id: pyupgrade
+            args: [--py39-plus]
+
+    -   repo: https://github.com/pycqa/isort
+        rev: 5.13.2
+        hooks:
+        -    id: isort
+             additional_dependencies: ['.[colors]']
+
+    -   repo: https://github.com/psf/black
+        rev: 24.1.0
+        hooks:
+        -   id: black
+            args: [--skip-magic-trailing-comma]
+
+    -   repo: https://github.com/pycqa/flake8.git
+        rev: 7.0.0
+        hooks:
+        -   id: flake8
+

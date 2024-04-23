@@ -21,7 +21,9 @@ class TestFPL(unittest.TestCase):
         self.assertAlmostEqual(self.fpl._four_param_sigmoid(1), 0.5)
         self.assertAlmostEqual(self.fpl._four_param_sigmoid(1e6), 0.95)
         self.assertAlmostEqual(self.fpl._four_param_sigmoid(-1e6), 0.05)
-        self.assertAlmostEqual(self.fpl._four_param_sigmoid(2), 0.05 + 0.9 / (1 + math.exp(-1)))
+        self.assertAlmostEqual(
+            self.fpl._four_param_sigmoid(2), 0.05 + 0.9 / (1 + math.exp(-1))
+        )
 
     def test_batch_update(self) -> None:
         xhat = np.array((1, 1))
@@ -29,9 +31,14 @@ class TestFPL(unittest.TestCase):
         # y_fac=2
         # delta_a =  1
         # delta_b = 0
-        # delta_c = -0.45 
+        # delta_c = -0.45
         # delta_d = 1
-        a, b, c, d = 0.95 - self.fpl.lr[0], 1, 1 + 0.45 * self.fpl.lr[2], 0.05 - self.fpl.lr[3]
+        a, b, c, d = (
+            0.95 - self.fpl.lr[0],
+            1,
+            1 + 0.45 * self.fpl.lr[2],
+            0.05 - self.fpl.lr[3],
+        )
         self.fpl._batch_update(xhat, ytrue)
         self.assertAlmostEqual(self.fpl.param[0], a)
         self.assertAlmostEqual(self.fpl.param[1], b)
@@ -45,7 +52,13 @@ class TestFPL(unittest.TestCase):
         self.assertEqual(len(p), 10)
         self.assertEqual(len(p[9]), 4)
         npt.assert_almost_equal(p[9], self.fpl.param)
-        updates = max(max([abs(i - j) for i, j in zip(p[n], p[n + 1])] for n in range(9) if n not in {2, 5, 8, 9}))
+        updates = max(
+            max(
+                [abs(i - j) for i, j in zip(p[n], p[n + 1])]
+                for n in range(9)
+                if n not in {2, 5, 8, 9}
+            )
+        )
         self.assertAlmostEqual(updates, 0)
 
     def test_fit_offline(self) -> None:
@@ -59,7 +72,9 @@ class TestFPL(unittest.TestCase):
 
         def neg_log_likelihood(theta_, X, y):
             m = X.shape[0]
-            yhat = theta_[3] + (theta_[0] - theta_[3]) * expit(theta_[1] * (X - theta_[2]))
+            yhat = theta_[3] + (theta_[0] - theta_[3]) * expit(
+                theta_[1] * (X - theta_[2])
+            )
             return -(1 / m) * np.sum(y * np.log(yhat) + (1 - y) * np.log(1 - yhat))
 
         min_ = neg_log_likelihood(theta, X, Y)
@@ -69,7 +84,9 @@ class TestFPL(unittest.TestCase):
         C = np.arange(1e-3, 20, 1)
         D = np.arange(0 + 1e-3, 0.5 - 1e-3, 0.1)
 
-        likelihoods = [neg_log_likelihood([a, b, c, d], X, Y) for a, b, c, d in product(A, B, C, D)]
+        likelihoods = [
+            neg_log_likelihood([a, b, c, d], X, Y) for a, b, c, d in product(A, B, C, D)
+        ]
         # This seems to fail every other time it is run !!!!!
         self.assertLessEqual(min_, min(likelihoods))
 
@@ -82,5 +99,5 @@ class TestFPL(unittest.TestCase):
         npt.assert_almost_equal(self.fpl.predict(X), np.array([0, 1]))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

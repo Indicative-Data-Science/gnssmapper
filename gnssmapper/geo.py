@@ -1,8 +1,9 @@
-""" 
+"""
 
 This module defines geometric methods that work in 3D and allow receiverpoints and observation objects to interact with a map
 
 """
+
 # rays,to_crs used in observations
 # fresnel,to_crs,is_outside,ground_level used in sim
 # map_to_crs is a standalone map method
@@ -16,7 +17,7 @@ import numpy as np
 import pandas as pd
 import pyproj
 import shapely.geometry
-from shapely import linestrings, points, get_coordinates
+from shapely import get_coordinates, linestrings
 
 import gnssmapper.common as cm
 from gnssmapper.common.check import Rays
@@ -28,11 +29,13 @@ def coordinates(rays: Rays) -> np.array:
 
 
 def z(points: gpd.GeoSeries) -> pd.Series:
-    """Returns Z coordinate for a set of point geometries """
+    """Returns Z coordinate for a set of point geometries"""
     return pd.Series((point.z for point in points), index=points.index)
 
 
-def to_crs(df: Union[gpd.GeoDataFrame, gpd.GeoSeries], target: pyproj.crs.CRS) -> Union[gpd.GeoDataFrame, gpd.GeoSeries]:
+def to_crs(
+    df: Union[gpd.GeoDataFrame, gpd.GeoSeries], target: pyproj.crs.CRS
+) -> Union[gpd.GeoDataFrame, gpd.GeoSeries]:
     """Reproject 3D geometry to target CRS. Assumes XY axis order.
 
     Bypasses geopandas to use pyproj directly, avoiding bug of dropping Z coordinate when pygeos used.
@@ -56,36 +59,34 @@ def to_crs(df: Union[gpd.GeoDataFrame, gpd.GeoSeries], target: pyproj.crs.CRS) -
         cm.check.crs(target_crs)
         cm.check.crs(geometry.crs)
         transformer = pyproj.Transformer.from_crs(
-            geometry.crs, target_crs, always_xy=True)
+            geometry.crs, target_crs, always_xy=True
+        )
         if not all(shapely.has_z(geometry.array.data)):
-            coords = shapely.get_coordinates(
-                geometry.array.data, include_z=False)
+            coords = shapely.get_coordinates(geometry.array.data, include_z=False)
             new_coords = transformer.transform(coords[:, 0], coords[:, 1])
         else:
-            coords = shapely.get_coordinates(
-                geometry.array.data, include_z=True)
-            new_coords = transformer.transform(
-                coords[:, 0], coords[:, 1], coords[:, 2])
-        return shapely.set_coordinates(geometry.array.data.copy(), np.array(new_coords).T)
+            coords = shapely.get_coordinates(geometry.array.data, include_z=True)
+            new_coords = transformer.transform(coords[:, 0], coords[:, 1], coords[:, 2])
+        return shapely.set_coordinates(
+            geometry.array.data.copy(), np.array(new_coords).T
+        )
 
     if isinstance(df, gpd.GeoDataFrame):
-        return df.set_geometry(
-            transform_geoseries(df.geometry),
-            crs=target)
+        return df.set_geometry(transform_geoseries(df.geometry), crs=target)
     else:
         return gpd.GeoSeries(
-            transform_geoseries(df),
-            crs=target, index=df.index, name=df.name)
+            transform_geoseries(df), crs=target, index=df.index, name=df.name
+        )
 
 
 def rays(receivers: list, sats: list) -> shapely.LineString:
-    """ Turns arrays of points into array of linestrings.
+    """Turns arrays of points into array of linestrings.
 
-    The linestring is truncated towards the satellite. This is to avoid projected crs problems."""
+    The linestring is truncated towards the satellite. This is to avoid projected crs problems.
+    """
     coords = [[tuple(r), tuple(s)] for r, s in zip(receivers, sats)]
     lines = linestrings(coords)
-    short = shapely.line_interpolate_point(
-        lines, cm.constants.ray_length)
+    short = shapely.line_interpolate_point(lines, cm.constants.ray_length)
     short_coords = shapely.coordinates.get_coordinates(short, include_z=True)
     coords = [[tuple(r), tuple(s)] for r, s in zip(receivers, short_coords)]
     return shapely.creation.linestrings(coords)
@@ -106,21 +107,26 @@ def map_to_crs(map_: gpd.GeoDataFrame, target: pyproj.crs.CRS) -> gpd.GeoDataFra
     gpd.GeoDataFrame
         transformed map
     """
-    cm.check.check_type(map_, 'map', raise_errors=True)
+    cm.check.check_type(map_, "map", raise_errors=True)
     transformed = to_crs(map_, target)
 
     xy = map_.geometry.centroid
-    old_heights = gpd.GeoSeries(gpd.points_from_xy(
-        xy.x, xy.y, map_.height), crs=map_.crs)
+    old_heights = gpd.GeoSeries(
+        gpd.points_from_xy(xy.x, xy.y, map_.height), crs=map_.crs
+    )
     new_heights = to_crs(old_heights, target)
-    transformed['height'] = [point.z for point in new_heights]
+    transformed["height"] = [point.z for point in new_heights]
     return transformed
 
 
-def is_outside(map_: gpd.GeoDataFrame, points: gpd.GeoSeries, polygon: shapely.geometry.Polygon = shapely.geometry.Polygon()) -> pd.Series:
-    """ Returns boolean of whether points are outside of buildings.
+def is_outside(
+    map_: gpd.GeoDataFrame,
+    points: gpd.GeoSeries,
+    polygon: shapely.geometry.Polygon = shapely.geometry.Polygon(),
+) -> pd.Series:
+    """Returns boolean of whether points are outside of buildings.
 
-    Element-wise testing that points do not intersect any of the geometries contained in a map. 
+    Element-wise testing that points do not intersect any of the geometries contained in a map.
 
     Parameters
     ----------
@@ -140,14 +146,13 @@ def is_outside(map_: gpd.GeoDataFrame, points: gpd.GeoSeries, polygon: shapely.g
     if polygon.is_empty:
         k = (~np.any(map_.geometry.intersects(p)) for p in points)
     else:
-        k = (p.within(polygon) and ~np.any(map_.geometry.intersects(p))
-             for p in points)
+        k = (p.within(polygon) and ~np.any(map_.geometry.intersects(p)) for p in points)
 
     return pd.Series(k, index=points.index)
 
 
 def ground_level(map_, points: gpd.GeoSeries) -> pd.Series:
-    """ Returns ground level for each point. TO BE IMPLEMENTED """
+    """Returns ground level for each point. TO BE IMPLEMENTED"""
 
     # so far doesn't do anything except assuming ground level is zero
     k = np.zeros((len(points),))
@@ -170,15 +175,16 @@ def is_los(map_, rays: gpd.GeoSeries) -> pd.Series:
     pd.Series
         true if ray has a clear line of sight.
     """
-    cm.check.check_type(rays, 'rays', raise_errors=True)
+    cm.check.check_type(rays, "rays", raise_errors=True)
 
     los = np.ones((len(rays),), dtype=bool)
 
     for building, height in zip(map_.geometry, map_.height):
-        idx = los == True
+        idx = los
         n = sum(idx)
-        los[idx] = intersects(list(compress(rays, idx)), [
-            building]*n, np.ones(n,)*height)
+        los[idx] = intersects(
+            list(compress(rays, idx)), [building] * n, np.ones(n) * height
+        )
 
     return pd.Series(los, index=rays.index)
 
@@ -198,7 +204,10 @@ def fresnel(map_, rays: gpd.GeoSeries) -> pd.Series:
     pd.Series
         diffraction/fresnel zone attenuation
     """
-    return pd.Series((get_fresnel(ray, map_.geometry.array, map_.height.array) for ray in rays), index=rays.index)
+    return pd.Series(
+        (get_fresnel(ray, map_.geometry.array, map_.height.array) for ray in rays),
+        index=rays.index,
+    )
 
 
 def projected_height(map_, rays: gpd.GeoSeries) -> pd.DataFrame:
@@ -231,14 +240,16 @@ def drop_z(map_: gpd.GeoDataFrame):
     output = map_.copy()
     if shapely.has_z(map_.geometry.array.data).any():
         warnings.warn(
-            "Geometry contains Z co-ordinates. Removed from Map3D (height attribute)")
+            "Geometry contains Z co-ordinates. Removed from Map3D (height attribute)"
+        )
         output.geometry = shapely.apply(
-            map_.geometry.array.data, lambda x: x, include_z=False)
+            map_.geometry.array.data, lambda x: x, include_z=False
+        )
     return output
 
 
 def is_inside(points, polygon):
-    """  
+    """
     Parameters
     ----------
     points: [n] array of shapely points
@@ -248,8 +259,8 @@ def is_inside(points, polygon):
 
     Returns
     -------
-    is_outside: [n,] boolean array 
-        true if points are inside a bounding polygon. 
+    is_outside: [n,] boolean array
+        true if points are inside a bounding polygon.
 
     """
     mp = shapely.geometry.asMultiPoint(points)
@@ -261,24 +272,24 @@ def is_inside(points, polygon):
 
 
 def intersection_projected(rays, buildings):
-    """ 3d intersection point between rays and buildings (always the lowest height and assuming buildings have nonbounded heights). Empty Point if no intersection
+    """3d intersection point between rays and buildings (always the lowest height and assuming
+       buildings have nonbounded heights). Empty Point if no intersection
     Parameters
     ----------
-    rays : (n) shapely LineStrings (3d) 
+    rays : (n) shapely LineStrings (3d)
 
-    buildings : (n) polygons (2d) 
+    buildings : (n) polygons (2d)
 
     Returns
     -------
-    Points: (n) shapely Points (3d) 
+    Points: (n) shapely Points (3d)
 
     """
 
-    intersections = (building.exterior & ray for building,
-                     ray in zip(buildings, rays))
+    intersections = (building.exterior & ray for building, ray in zip(buildings, rays))
 
     def lowest(points):
-        if points.geom_type == 'Point':
+        if points.geom_type == "Point":
             return points
         # coords = np.asarray(points)
         # # lowest = np.nonzero(coords[:, 2] == min(coords[:, 2]))
@@ -290,7 +301,7 @@ def intersection_projected(rays, buildings):
 
 
 def intersection(rays, buildings, heights):
-    """ 3d intersection point (returns one with lowest height). Empty point if no intersect
+    """3d intersection point (returns one with lowest height). Empty point if no intersect
     Parameters
     ----------
     rays : (n) shapely LineStrings (3d)
@@ -302,14 +313,17 @@ def intersection(rays, buildings, heights):
 
     Returns
     -------
-    Points: [n] shapely Points (3d)   
+    Points: [n] shapely Points (3d)
     """
     points = intersection_projected(rays, buildings)
-    return [shapely.geometry.Point() if not p.is_empty and (p.z > h) else p for p, h in zip(points, heights)]
+    return [
+        shapely.geometry.Point() if not p.is_empty and (p.z > h) else p
+        for p, h in zip(points, heights)
+    ]
 
 
 def intersects(rays, buildings, heights):
-    """ a 3D intersection test
+    """a 3D intersection test
     Parameters
     ----------
     rays : (n) shapely LineStrings (3d)
@@ -321,7 +335,7 @@ def intersects(rays, buildings, heights):
 
     Returns
     -------
-    Boolean:  [n,] float array 
+    Boolean:  [n,] float array
 
     """
     points = intersection_projected(rays, buildings)
@@ -338,7 +352,7 @@ def intersection_projected_height(rays, buildings):
 
     Returns
     -------
-    height:  [n,] float array 
+    height:  [n,] float array
         height at which observation intersects building. Nan if no intersection
 
     """
@@ -347,7 +361,7 @@ def intersection_projected_height(rays, buildings):
 
 
 def get_fresnel(ray, buildings, heights):
-    """ returns the fresnel attenuation across a set of buildings for a ray using Epstein-Peterson method
+    """returns the fresnel attenuation across a set of buildings for a ray using Epstein-Peterson method
     Parameters
     ----------
     ray : shapely LineString (3d)
@@ -369,8 +383,9 @@ def get_fresnel(ray, buildings, heights):
 
     sort_index = np.argsort(points[i].z for i in idx)
     idx = idx[sort_index]
-    diffraction_points = [shapely.geometry.Point(
-        points[i].x, points[i].y, heights[i]) for i in idx]
+    diffraction_points = [
+        shapely.geometry.Point(points[i].x, points[i].y, heights[i]) for i in idx
+    ]
     start = chain([ray.boundary.geoms[0]], diffraction_points)
     end = chain(diffraction_points, [ray.boundary.geoms[1]])
     next(end)
@@ -385,19 +400,19 @@ def fresnel_integral(v_array):
         if v < -1:
             return 0
         if v < 0 and v >= -1:
-            return 20 * np.log(0.5 - 0.62*v)
+            return 20 * np.log(0.5 - 0.62 * v)
         if v < 1 and v >= 0:
-            return 20 * np.log(0.5 * np.exp(-0.95*v))
+            return 20 * np.log(0.5 * np.exp(-0.95 * v))
         if v < 2.4 and v >= 1:
-            return 20 * np.log(0.4 - (0.1184-(0.38-0.1*v)**2)**0.5)
+            return 20 * np.log(0.4 - (0.1184 - (0.38 - 0.1 * v) ** 2) ** 0.5)
         if v >= 2.4:
-            return 20 * np.log(0.225/v)
+            return 20 * np.log(0.225 / v)
 
     return np.array([-J(_) for _ in v_array])
 
 
 def fresnel_parameter(rays, diffraction_points):
-    """ returns the fresnel diffraction parameter (always as a positive)
+    """returns the fresnel diffraction parameter (always as a positive)
     Parameters
     ----------
     rays : [n] list of shapely LineString (3d)
@@ -412,13 +427,16 @@ def fresnel_parameter(rays, diffraction_points):
 
     """
     wavelength = 0.1903  # GPS L1 signal frequency of 1575.42 MHz
-    distances = np.array([r.project(d)
-                          for r, d in zip(rays, diffraction_points)])
+    distances = np.array([r.project(d) for r, d in zip(rays, diffraction_points)])
     nearest_points = (r.interpolate(d) for r, d in zip(rays, distances))
 
     diffraction_distances = np.array(
-        [d.z-p.z for p, d in zip(nearest_points, diffraction_points)])
+        [d.z - p.z for p, d in zip(nearest_points, diffraction_points)]
+    )
 
-    v = np.where(distances == 0, -np.inf, diffraction_distances *
-                 (2 / (wavelength * distances))**0.5)
+    v = np.where(
+        distances == 0,
+        -np.inf,
+        diffraction_distances * (2 / (wavelength * distances)) ** 0.5,
+    )
     return v
