@@ -1,5 +1,5 @@
 """Unittests for the functions in raw, using example datasets."""
-
+import os.path
 import unittest
 import pandas.testing as pt
 import pandas as pd
@@ -11,8 +11,9 @@ import gnssmapper.common.constants as cn
 
 class TestReadCSV(unittest.TestCase):
     def setUp(self):
-        self.filedir = "./tests/data/"
-        self.filepath = self.filedir+"log_20200211.txt"
+        THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.filedir = "data/"
+        self.filepath = os.path.join(THIS_DIR,self.filedir,"log_20200211.txt")
 
     def test_read_csv_(self) -> None:
         raw_var,fix = log.read_csv_(self.filepath)
@@ -146,8 +147,11 @@ class TestProcessRaw(unittest.TestCase):
 
 class TestNA(unittest.TestCase):
     def setUp(self):
-        self.filedir = "./tests/data/"
-        self.filepath = self.filedir+"missing.txt"
+        THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.filedir = "data/"
+        self.filepath = os.path.join(THIS_DIR,self.filedir,"missing.txt")
+
+        self.assertTrue(os.path.exists(self.filepath))
 
     def test_datatype(self) -> None:
         raw_var, fix = log.read_csv_(self.filepath)
@@ -168,8 +172,10 @@ class TestNA(unittest.TestCase):
 
 class TestJoinReceiverPosition(unittest.TestCase):
     def setUp(self):
-        self.filedir = "./tests/data/"
-        self.filepath = self.filedir+"log_20200211.txt"
+        THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.filedir = "data/"
+        self.filepath = os.path.join(THIS_DIR,self.filedir,"log_20200211.txt")
+
         raw_var, fix = log.read_csv_(self.filepath)
         self.gnss_obs = log.process_raw(raw_var[0:50])
         self.gnss_fix=fix[0:1]
@@ -177,9 +183,9 @@ class TestJoinReceiverPosition(unittest.TestCase):
     def test_joining(self) -> None:
         epoch = self.gnss_obs[0:35]
         result = log.join_receiver_position(epoch, self.gnss_fix)
-        self.assertEqual(len(result), 35)
-        self.assertEqual(result.time.nunique(), 1)
-        self.assertEqual(result.Longitude.nunique(), 1)
+        self.assertEqual(35, len(result))
+        self.assertEqual(1, result.time.nunique())
+        self.assertEqual(1, result.Longitude.nunique())
     
     def test_warning_on_drop(self) -> None:
         self.assertWarnsRegex(UserWarning,

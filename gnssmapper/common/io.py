@@ -1,7 +1,7 @@
 """ This module provides file read and write capabilities for gnssmapper objects.
     Currently unused! - just use the geopandas methods and tweak datatypes on loading...
 """
-from typing import Union, Set
+from typing import Union, Set, final
 import warnings
 
 
@@ -63,8 +63,8 @@ def to_file(df, filename, driver="GPKG", schema=None, index=None, **kwargs):
 
     final['Cn0DbHz'] = final['Cn0DbHz'].astype(
         'float64')  # otherwise won't write)
-    inal['time'] = final.time.astype('datetime64[s]')
-    }
+    final['time'] = final.time.astype('datetime64[s]')
+
 
 
 def read_file(filename, bbox=None, mask=None, rows=None, **kwargs):

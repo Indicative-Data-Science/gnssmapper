@@ -7,26 +7,23 @@ This module defines geometric methods that work in 3D and allow receiverpoints a
 # fresnel,to_crs,is_outside,ground_level used in sim
 # map_to_crs is a standalone map method
 
-from itertools import chain, compress, cycle, repeat
-from typing import Union
 import warnings
-
+from itertools import chain, compress, repeat
+from typing import Union
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pyproj
-import pygeos
 import shapely.geometry
-from shapely.ops import transform
-from shapely.wkt import loads
+from shapely import linestrings, points, get_coordinates
 
 import gnssmapper.common as cm
 from gnssmapper.common.check import Rays
 
 
 def coordinates(rays: Rays) -> np.array:
-    coords = pygeos.get_coordinates(rays.array.data, include_z=True)
+    coords = get_coordinates(rays.array.data, include_z=True)
     return coords.reshape((rays.shape[0], 2, 3))
 
 
@@ -44,8 +41,7 @@ def to_crs(df: Union[gpd.GeoDataFrame, gpd.GeoSeries], target: pyproj.crs.CRS) -
     ----------
     geometry : gpd.GeoDataFrame
         series to be transformed
-    target : pyproj.crs.CRS
-        CRS to be transformed to
+
 
     Returns
     -------
@@ -61,16 +57,16 @@ def to_crs(df: Union[gpd.GeoDataFrame, gpd.GeoSeries], target: pyproj.crs.CRS) -
         cm.check.crs(geometry.crs)
         transformer = pyproj.Transformer.from_crs(
             geometry.crs, target_crs, always_xy=True)
-        if not all(pygeos.has_z(geometry.array.data)):
-            coords = pygeos.get_coordinates(
+        if not all(shapely.has_z(geometry.array.data)):
+            coords = shapely.get_coordinates(
                 geometry.array.data, include_z=False)
             new_coords = transformer.transform(coords[:, 0], coords[:, 1])
         else:
-            coords = pygeos.get_coordinates(
+            coords = shapely.get_coordinates(
                 geometry.array.data, include_z=True)
             new_coords = transformer.transform(
                 coords[:, 0], coords[:, 1], coords[:, 2])
-        return pygeos.set_coordinates(geometry.array.data.copy(), np.array(new_coords).T)
+        return shapely.set_coordinates(geometry.array.data.copy(), np.array(new_coords).T)
 
     if isinstance(df, gpd.GeoDataFrame):
         return df.set_geometry(
@@ -82,17 +78,17 @@ def to_crs(df: Union[gpd.GeoDataFrame, gpd.GeoSeries], target: pyproj.crs.CRS) -
             crs=target, index=df.index, name=df.name)
 
 
-def rays(receivers: list, sats: list) -> pygeos.Geometry:
+def rays(receivers: list, sats: list) -> shapely.LineString:
     """ Turns arrays of points into array of linestrings.
 
     The linestring is truncated towards the satellite. This is to avoid projected crs problems."""
     coords = [[tuple(r), tuple(s)] for r, s in zip(receivers, sats)]
-    lines = pygeos.creation.linestrings(coords)
-    short = pygeos.linear.line_interpolate_point(
+    lines = linestrings(coords)
+    short = shapely.line_interpolate_point(
         lines, cm.constants.ray_length)
-    short_coords = pygeos.coordinates.get_coordinates(short, include_z=True)
+    short_coords = shapely.coordinates.get_coordinates(short, include_z=True)
     coords = [[tuple(r), tuple(s)] for r, s in zip(receivers, short_coords)]
-    return pygeos.creation.linestrings(coords)
+    return shapely.creation.linestrings(coords)
 
 
 def map_to_crs(map_: gpd.GeoDataFrame, target: pyproj.crs.CRS) -> gpd.GeoDataFrame:
@@ -233,10 +229,10 @@ def projected_height(map_, rays: gpd.GeoSeries) -> pd.DataFrame:
 def drop_z(map_: gpd.GeoDataFrame):
     """Drops z attribute"""
     output = map_.copy()
-    if pygeos.has_z(map_.geometry.array.data).any():
+    if shapely.has_z(map_.geometry.array.data).any():
         warnings.warn(
             "Geometry contains Z co-ordinates. Removed from Map3D (height attribute)")
-        output.geometry = pygeos.apply(
+        output.geometry = shapely.apply(
             map_.geometry.array.data, lambda x: x, include_z=False)
     return output
 
@@ -288,7 +284,7 @@ def intersection_projected(rays, buildings):
         # # lowest = np.nonzero(coords[:, 2] == min(coords[:, 2]))
         # lowest = np.argmin(coords[:, 2]
         # return points[lowest]
-        return min(points, key=lambda x: x.z)
+        return min(points.geoms, key=lambda x: x.z)
 
     return (points if points.is_empty else lowest(points) for points in intersections)
 
@@ -375,8 +371,8 @@ def get_fresnel(ray, buildings, heights):
     idx = idx[sort_index]
     diffraction_points = [shapely.geometry.Point(
         points[i].x, points[i].y, heights[i]) for i in idx]
-    start = chain([ray.boundary[0]], diffraction_points)
-    end = chain(diffraction_points, [ray.boundary[1]])
+    start = chain([ray.boundary.geoms[0]], diffraction_points)
+    end = chain(diffraction_points, [ray.boundary.geoms[1]])
     next(end)
     ep_rays = [shapely.geometry.LineString([p, q]) for p, q in zip(start, end)]
     v = fresnel_parameter(ep_rays, diffraction_points)
